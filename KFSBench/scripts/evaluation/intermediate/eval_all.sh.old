@@ -1,0 +1,149 @@
+# # firstly, put all videos as a symlink under static/lvbench_videos
+# # evaluation/lvbench/format_questions has already been run. Ignore it.
+echo videoagent
+python scripts/evaluation/eval_json.py \
+    --pred_path=data/lvbench/json_results/new/videoagent.jsonl \
+    --fps_dict_path data/lvbench/datasets/fps.json \
+    --threshold 5 \
+    --group 3600
+
+
+names=(
+    # "15_Tsearching_8" # 15
+    ##  "60_TSearching" 
+    # "TSearching_max_resource" # 60
+    # "600_RLSearching_8" 
+    #  "600_TSearching_8frames"  # 600
+    "3600_TSearching_8frames" 
+    ## 15_32frames  
+    # "60_TSearching_32" # 60
+    # "searching_distribution_shift" # 600
+    "3600_RL_32frames"
+    ##  "
+)
+# frames=(
+#     8 8 8 8 32 32 32
+# )
+
+groups=(
+    3600 3600
+)
+frames=(
+    8 32
+)
+i=-1
+for name in "${names[@]}"
+do
+    i=$((i+1))
+    frame=${frames[$i]}
+    group=${groups[$i]}
+    echo "Processing frame ${frame} group ${group}"
+    echo ours
+    python scripts/evaluation/eval_json.py \
+        --pred_path=data/lvbench/json_results/new/${name}.json \
+        --fps_dict_path data/lvbench/datasets/fps.json \
+        --threshold 1
+    
+    echo random
+    python scripts/evaluation/eval_json.py \
+        --fps_dict_path data/lvbench/datasets/fps.json \
+        --pred_path=data/lvbench/json_results/new/${name}.json \
+        --num_frames ${frame} \
+        --baseline \
+        --threshold 1
+done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# python scripts/evaluation/json_to_frames.py \
+#     --json_path data/lvbench/datasets/questions-all-formatted-lvbench.json \
+#     --video_dir static/lvbench_videos \
+#     --output_dir data/lvbench/frame_results/lvbench_oracle \
+#     --dry_run \
+#     --mode oracle
+
+## python scripts/evaluation/json_to_frames.py \
+##     --json_path data/questions-annotated.json \
+##     --video_dir static/clip_videos \
+##     --output_dir data/kfsbench_oracle.json \
+##     --mode oracle
+
+
+
+#### processing lvbench results
+
+# names=(
+#     "15_Tsearching_8" "60_TSearching_32" "60_TSearching" 
+#     "600_RLSearching_8" "600_TSearching_8frames" "3600_RL_32frames" 
+#     "3600_TSearching_8frames" "searching_distribution_shift" "TSearching_max_resource"
+# )
+# # this would create model prediction file frames under data/lvbench/frame_results/XXX given files such as data/lvbench/json_results/linear_search.json
+# for name in "${names[@]}"
+# do
+#     python scripts/evaluation/json_to_frames.py \
+#         --json_path data/lvbench/datasets/questions-all-formatted-lvbench.json \
+#         --json_result_path data/lvbench/json_results/new/${name}.json \
+#         --video_dir static/lvbench_videos \
+#         --output_dir data/lvbench/frame_results/${name} \
+#         --fps_dict_path data/lvbench/datasets/fps.json \
+#         --mode result \
+#         --dry_run
+# done
+
+# if the json result path uses seconds, then we need to convert it to frame index
+
+# for framenum in 8 32
+# do
+#     python scripts/evaluation/search_frames.py \
+#         --json_path data/lvbench/datasets/questions-all-formatted-lvbench.json \
+#         --strategy uniform \
+#         --num_frames ${framenum} \
+#         --video_dir ~/data/LongVideoBench/videos \
+#         --output_dir data/lvbench/frame_results/uniform_baseline_${framenum}frames \
+#         --dry_run
+# done
+
+
+
+# get the table for each model
+
+# names=(
+#     "15_Tsearching_8" "60_TSearching" "600_TSearching_8frames"  
+#     "3600_TSearching_8frames" 
+#     # 15_32frames  
+#     "60_TSearching_32" "searching_distribution_shift" 
+#     "3600_RL_32frames"
+#     # "600_RLSearching_8" ""TSearching_max_resource"
+#     "uniform_baseline_8frames" "uniform_baseline_32frames"
+# )
+# for name in "${names[@]}"
+# do
+#     echo "Processing ${name}"
+#     python scripts/evaluation/get_table.py \
+#         --gt_folder_path=data/lvbench/frame_results/lvbench_oracle \
+#         --pred_folder_path=data/lvbench/frame_results/${name} \
+#         --json_path data/lvbench/datasets/questions-all-formatted-lvbench.json \
+#         --fps_dict_path data/lvbench/datasets/fps.json \
+#         --group 3600
+# done
+
+
+### processing kfsbench results
+

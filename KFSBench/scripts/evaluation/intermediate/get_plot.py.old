@@ -1,0 +1,117 @@
+import argparse
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from kfs.utils import load_json, videoTime
+
+def format_value(value):
+    """Round the value to 2 decimal places for cleaner output."""
+    return round(value, 5)
+
+def filter_predictions_by_group(pred_json, group):
+    """Filter predictions based on the specified group, if any."""
+    if group:
+        return [item for item in pred_json if item['duration_group'] == int(group)]
+    return pred_json
+
+def is_correct_choice(item, args):
+    """Determine if the predicted answer is correct."""
+    if "linear_search" in args.pred_json:
+        return item['linear_predict_answer'].index(max(item['linear_predict_answer'])) == item['correct_choice']
+    elif "zoom_in_search" in args.pred_json:
+        return ord(item['search_predict_answer']) - ord("A") == item['correct_choice']
+    else:
+        raise ValueError("Invalid result data format. Cannot determine correct choice.")
+
+def calculate_dots(pred_json, args):
+    """Calculate relative positions (dots) based on frame index and position."""
+    dots = []
+    fps_dict = load_json(args.fps_dict)
+    for item in pred_json:
+        frame_dots = []
+        for pos in item['position']:
+            if "linear_search" in args.pred_json:
+                frame_indices = item['frame_index_linearsearch']
+                min_diff_index = frame_indices[np.argmin([abs(pos / 30 - k / 30) for k in frame_indices])] / 30
+            elif "zoom_in_search" in args.pred_json:
+                frame_indices = item['frame_index_adaframe_sec']
+                min_diff_index = frame_indices[np.argmin([abs(pos / 30 - k) for k in frame_indices])]
+            else:
+                raise ValueError("Invalid result data format. Cannot find frame index.")
+
+            frame_dot = (min_diff_index / item['duration'], pos / 30 / item['duration'])
+            frame_dots.append(frame_dot)
+        dots.append(frame_dots)
+    return dots
+
+
+def plot_dots(dots, correct):
+    """Plot the correct and incorrect answer dots."""
+    diff_correct, diff_incorrect = [], []
+
+    # Separate correct and incorrect dots
+    for idx, frame_dots in enumerate(dots):
+        if correct[idx]:
+            diff_correct.extend(frame_dots)
+        else:
+            diff_incorrect.extend(frame_dots)
+
+    # Plot correct and incorrect answers
+    plt.figure(figsize=(8, 6))
+    if diff_correct:
+        x, y = zip(*diff_correct)
+        plt.scatter(x, y, color='green', label="Correct", marker='o', alpha=0.5)
+    if diff_incorrect:
+        x, y = zip(*diff_incorrect)
+        plt.scatter(x, y, color='red', label="Incorrect", marker='x', alpha=0.5)
+
+    # Plot diagonal line for reference
+    plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+
+    # Calculate average differences
+    avg_diff_correct = np.mean([abs(i[0] - i[1]) for i in diff_correct], axis=0) if diff_correct else 0
+    avg_diff_incorrect = np.mean([abs(i[0] - i[1]) for i in diff_incorrect], axis=0) if diff_incorrect else 0
+
+    # Print average differences
+    print(f"Average difference for correct: {format_value(avg_diff_correct)}")
+    print(f"Average difference for incorrect: {format_value(avg_diff_incorrect)}")
+
+    # Add labels and legend
+    plt.xlabel("Relative Annotation Position")
+    plt.ylabel("Relative Prediction Position")
+    plt.title("Relevance between Frame Index Difference and Answer Correctness")
+    plt.legend([
+        f"Correct (Green) (Avg. Diff: {format_value(avg_diff_correct)})",
+        f"Incorrect (Red) (Avg. Diff: {format_value(avg_diff_incorrect)})",
+        "Diagonal"
+    ])
+    plt.grid(True)
+    
+    # Save the plot
+    os.makedirs("log/plots", exist_ok=True)
+    plt.savefig("log/plots/dots_classification_plot.png", dpi=300)
+    plt.show()
+
+
+def main(args):
+    pred_json = load_json(args.pred_json)
+    pred_json = filter_predictions_by_group(pred_json, args.group)
+
+    # Determine correctness of each prediction
+    correct = [is_correct_choice(item, args) for item in pred_json]
+
+    # Calculate dots for plotting
+    dots = calculate_dots(pred_json, args)
+
+    # Plot the dots
+    plot_dots(dots, correct)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Compute comparison metrics between ground truth and predicted data.")
+    parser.add_argument("--pred_json", type=str, required=True, help="Path to the predicted folder.")
+    parser.add_argument("--fps_dict", type=str, required=True, help="Path to the frame rate dictionary.")
+    parser.add_argument("--group", type=str, required=False, help="Group of the JSON file with video frame positions.")
+    args = parser.parse_args()
+
+    main(args)
