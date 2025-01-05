@@ -88,7 +88,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--output_json', type=str, default='./batch_output.json', help='Path to save the batch processing results.')
 
     # Common arguments
-    parser.add_argument('--config_path', type=str, default="./YOLOWorld/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
+    parser.add_argument('--config_path', type=str, default="./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth", help='Path to the YOLO model checkpoint.')
     parser.add_argument('--device', type=str, default="cuda:0", help='Device for model inference (e.g., "cuda:0" or "cpu").')
     parser.add_argument('--search_nframes', type=int, default=8, help='Number of top frames to return.')

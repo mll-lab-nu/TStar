@@ -26,10 +26,10 @@ def parse_arguments() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="TStarSearcher: Video Frame Search and QA Tool")
-    parser.add_argument('--video_path', type=str, default="./LLaVA-NeXT/playground/demo/xU25MMA2N4aVtYay.mp4", help='Path to the input video file.')
+    parser.add_argument('--video_path', type=str, default="./Datasets/ego4d/ego4d_data/v1/256p/38737402-19bd-4689-9e74-3af391b15feb.mp4", help='Path to the input video file.')
     parser.add_argument('--question', type=str, default="What is the color of my couch?", help='Question for video content QA.')
     parser.add_argument('--options', type=str, default="A) Red\nB) Black\nC) Green\nD) White\n", help='Multiple-choice options for the question, e.g., "A) Option1\nB) Option2\nC) Option3\nD) Option4"')
-    parser.add_argument('--config_path', type=str, default="./YOLOWorld/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
+    parser.add_argument('--config_path', type=str, default="./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth", help='Path to the YOLO model checkpoint.')
     parser.add_argument('--device', type=str, default="cuda:0", help='Device for model inference (e.g., "cuda:0" or "cpu").')
     parser.add_argument('--search_nframes', type=int, default=8, help='Number of top frames to return.')
