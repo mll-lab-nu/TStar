@@ -447,7 +447,9 @@ class TStarSearcher:
             frame_indices=sampled_frame_indices
         )
 
-        return sampled_frame_secs.tolist(), frames
+        resized_frames = [cv2.resize(frame, (160*4, 120*4)) for frame in frames]  # Resize to 160x120
+
+        return sampled_frame_secs.tolist(), resized_frames
 
     ### --- Verification Methods --- ###
 
@@ -474,7 +476,7 @@ class TStarSearcher:
                 # Read the individual frame
                 _, frame = self.read_frame_batch(self.video_path, [frame_idx])
                 frame = frame[0]  # Extract the frame from the list
-
+                
                 # Perform detection on the individual frame
                 single_confidence_maps, single_detected_objects_maps = self.score_image_grids(
                     [frame], (1, 1)

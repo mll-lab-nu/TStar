@@ -97,6 +97,8 @@ class TStarFramework:
         self.checkpoint_path = checkpoint_path
         self.device = device
 
+        self.video_id=self.video_path.split("/")[-1].split(".")[0]
+        self.output_dir = os.path.join(self.output_dir, self.video_id)  # 视频保存路径
         # Ensure the output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
         logger.info("VideoSearcher initialized successfully.")
@@ -111,18 +113,8 @@ class TStarFramework:
         target_objects, cue_objects = self.get_grounded_objects()
 
         # Initialize TStarSearcher
-        video_searcher = TStarSearcher(
-            video_path=self.video_path,
-            target_objects=target_objects,
-            cue_objects=cue_objects,
-            search_nframes=self.search_nframes,
-            image_grid_shape=(self.grid_rows, self.grid_cols),
-            output_dir=self.output_dir,
-            confidence_threshold=self.confidence_threshold,
-            search_budget=self.search_budget,
-            prefix=self.prefix,
-            yolo_scorer=self.yolo_scorer
-        )
+        video_searcher  = self.set_searching_targets(target_objects, cue_objects)
+
         
         logger.info(f"TStarSearcher initialized successfully for video {self.video_path}.")
 
@@ -162,6 +154,41 @@ class TStarFramework:
         logger.info(f"Cue objects: {cue_objects}")
         self.results["Searching_Objects"] = {"target_objects": target_objects, "cue_objects": cue_objects}
         return target_objects, cue_objects
+    
+    def set_searching_targets(self, target_objects, cue_objects):
+        """
+        Initialize and configure the TStarSearcher for video object search.
+
+        Args:
+            target_objects (List[str]): List of target objects to search for in the video.
+            cue_objects (List[str]): List of cue objects to assist in locating target objects.
+
+        Returns:
+            TStarSearcher: Configured instance of the TStarSearcher class.
+
+        Notes:
+            - The `TStarSearcher` is responsible for performing the object search within the video
+            using the specified targets and cues.
+            - Key parameters such as the search frame limit (`search_nframes`), grid shape (`image_grid_shape`),
+            confidence threshold (`confidence_threshold`), and search budget (`search_budget`) are passed
+            to the `TStarSearcher`.
+            - The `yolo_scorer` is used as the object detection model for evaluating the objects in the video.
+        """
+        video_searcher = TStarSearcher(
+            video_path=self.video_path,
+            target_objects=target_objects,
+            cue_objects=cue_objects,
+            search_nframes=self.search_nframes,
+            image_grid_shape=(self.grid_rows, self.grid_cols),
+            output_dir=self.output_dir,
+            confidence_threshold=self.confidence_threshold,
+            search_budget=self.search_budget,
+            yolo_scorer=self.yolo_scorer
+        )
+
+        return video_searcher
+
+
 
     def perform_search(self, video_searcher: TStarSearcher) -> Tuple[List[np.ndarray], List[float]]:
         """
@@ -216,19 +243,22 @@ class TStarFramework:
             frames (List[np.ndarray]): List of frames to save.
             timestamps (List[float]): Corresponding timestamps of the frames.
         """
+        # Ensure the output directory exists
+        
+        
+        output_dir = os.path.join(self.output_dir, "frame_sampling")
+        os.makedirs(output_dir, exist_ok=True)
         for idx, (frame, timestamp) in enumerate(zip(frames, timestamps)):
             frame_path = os.path.join(
-                self.output_dir,
+                output_dir,
                 f"frame_{idx}_at_{timestamp:.2f}s.jpg"
             )
+            
             cv2.imwrite(frame_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
             logger.info(f"Saved frame to {frame_path}")
 
-    def save_searching_iters(self, video_searcher, video_ids=[]):
-        # # 定义 resize 操作，目标大小为 (640, 640)
-        # resize_transform = T.Resize((1024, 1024))
-        # resized_frames_tensor = resize_transform(resized_frames_tensor)
-        
+    def save_searching_iters(self, video_searcher):
+
         image_grid_iters = video_searcher.image_grid_iters # iters, b, image # b = 1 for v1
         detect_annotot_iters = video_searcher.detect_annotot_iters # iters, b, image
         detect_bbox_iters = video_searcher.detect_bbox_iters #iters, b, n_objects, xxyy, 
@@ -242,24 +272,10 @@ class TStarFramework:
 
             # 设置视频的参数
             video_id=self.video_path.split("/")[-1].split(".")[0]
-            output_video_path = os.path.join(self.output_dir, f"{video_id}.gif")  # 视频保存路径
+            question = self.question
+            output_video_path = os.path.join(self.output_dir, f"{question}.gif")  # 视频保存路径
             save_as_gif(images=anno_images, output_gif_path=output_video_path)
-            # fourcc = cv2.VideoWriter_fourcc(*'MJPG')  # 使用 'mp4v' 编码器
-            # # 创建 VideoWriter 对象
-            # video_writer = cv2.VideoWriter(output_video_path, fourcc, fps, frame_size)
 
-            # # 将每一帧图像写入视频
-            # for img in anno_images:
-            #     # 确保图像是 uint8 类型
-            #     frame = img.astype(np.uint8)
-            #     # 写入当前帧
-            #     video_writer.write(frame)
-
-            # # 释放 VideoWriter
-            # video_writer.release()
-            # print("save video ")
-            # pass
-    
 
 
 def initialize_yolo(

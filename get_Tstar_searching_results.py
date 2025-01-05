@@ -3,7 +3,7 @@ import json
 from typing import List, Dict
 
 
-def transform2Tstar_Json(entry: dict) -> dict:
+def Ego4d2Tstar_Json(entry: dict, args) -> dict:
     """
     Transforms a complex entry dictionary into a simplified format containing
     only 'video_path', 'question', and 'options'.
@@ -11,24 +11,29 @@ def transform2Tstar_Json(entry: dict) -> dict:
     Args:
         entry (dict): The original dictionary with multiple fields.
 
-    Returns:
-        input dict: A simplified dictionary with 'video_path', 'question', and 'options'.
-        
+    Output json
+        [
+            {
+                "video_path": "path/to/video1.mp4",
+                "question": "What is the color of my couch?",
+                "options": "A) Red\nB) Black\nC) Green\nD) White\n"
+            },
+            // 更多条目...
+        ]
     """
     # Extract necessary fields
     #@TBD Jinhui
-    video_path = entry.get('video_id')
-    video_path = "./38737402-19bd-4689-9e74-3af391b15feb.mp4"
-    question = entry.get('question') or entry.get('question_wo_referring_query')
+    video_id = entry.get('source_video_uid')
+    question = entry.get('query')
     candidates = entry.get('candidates', [])
 
     # Validate extracted fields
-    if not video_path:
+    if not video_id:
         raise ValueError("The entry is missing the 'video_path' field.")
     if not question:
         raise ValueError("The entry is missing the 'question' field.")
-    if not candidates:
-        raise ValueError("The entry is missing the 'candidates' field or it is empty.")
+    # if not candidates:
+    #     raise ValueError("The entry is missing the 'candidates' field or it is empty.")
 
     # Generate options string with letter prefixes
     options = ""
@@ -46,7 +51,8 @@ def transform2Tstar_Json(entry: dict) -> dict:
     options = options.rstrip('\n')
 
     return {
-        "video_path": video_path,
+        "video_id": video_id,
+        "video_path": os.path.join(args.video_root, video_id+".mp4"),
         "question": question,
         "options": options
    }
@@ -83,10 +89,11 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description="TStarSearcher: Video Frame Search and QA Tool")
 
-    # Batch processing arguments
-    parser.add_argument('--json_path', type=str, default="llava/VL-Haystack/Datasets/Haystack-Bench/KFS_lvbench_XL_allinone.json", help='Path to the input JSON file for batch processing.')
+    # Data meta processing arguments
+    parser.add_argument('--json_path', type=str, default="./Datasets/Haystack-Bench/ego4d_nlq_val.json", help='Path to the input JSON file for batch processing.')
     parser.add_argument('--output_json', type=str, default='./batch_output.json', help='Path to save the batch processing results.')
-
+    parser.add_argument('--video_root', type=str, default='./Datasets/ego4d/ego4d_data/v1/256p/', help='Root directory where the input video files are stored.')
+    
     # Common arguments
     parser.add_argument('--config_path', type=str, default="./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth", help='Path to the YOLO model checkpoint.')
@@ -119,7 +126,7 @@ def process_single_search(args, searching_entry,
  
 
     # Initialize VideoSearcher
-    searcher = TStarFramework(
+    TStar_framework = TStarFramework(
         grounder=grounder,
         yolo_scorer=yolo_scorer,
         video_path=searching_entry['video_path'],
@@ -136,37 +143,37 @@ def process_single_search(args, searching_entry,
     )
 
     # Use Grounder to get target and cue objects
-    target_objects, cue_objects = searcher.get_grounded_objects()
+    target_objects, cue_objects = TStar_framework.get_grounded_objects()
 
-    # Initialize TStarSearcher
-    video_searcher = TStarSearcher(
-        video_path=searcher.video_path,
-        target_objects=target_objects,
-        cue_objects=cue_objects,
-        search_nframes=searcher.search_nframes,
-        image_grid_shape=(args.grid_rows, args.grid_cols),
-        output_dir=args.output_dir,
-        confidence_threshold=args.confidence_threshold,
-        search_budget=args.search_budget,
-        prefix=args.prefix,
-        yolo_scorer=yolo_scorer
-    )
+    # Initialize Searching Targets to TStar Seacher
+    video_searcher = TStar_framework.set_searching_targets(target_objects, cue_objects)
+
 
     # Perform search
-    all_frames, time_stamps = searcher.perform_search(video_searcher)
+    all_frames, time_stamps = TStar_framework.perform_search(video_searcher)
 
     # # Save retrieved frames
-    # searcher.save_frames(all_frames, time_stamps)
+    TStar_framework.save_searching_iters(video_searcher)
+    # Plot and save score distribution
+    TStar_framework.plot_and_save_scores(video_searcher)
 
-    # Perform question-answering on retrieved frames
-    answer = searcher.perform_qa(all_frames)
+    # Save retrieved frames
+    TStar_framework.save_frames(all_frames, time_stamps)
+
+        # Output the results
+    print("Final Results:")
+    print(f"Grounding Objects: {TStar_framework.results['Searching_Objects']}")
+    print(f"Frame Timestamps: {TStar_framework.results['timestamps']}")
+
+
+
+    
     
     # Collect the results
     result = {
         "video_path": searching_entry['video_path'],
-        "grounding_objects": searcher.results.get('Searching_Objects', []),
-        "frame_timestamps": searcher.results.get('timestamps', []),
-        "answer": searcher.results.get('answer', "")
+        "grounding_objects": TStar_framework.results.get('Searching_Objects', []),
+        "frame_timestamps": TStar_framework.results.get('timestamps', []),
     }
 
     return result
@@ -199,19 +206,19 @@ def main():
     if args.json_path:
         # Batch processing
         with open(args.json_path, 'r', encoding='utf-8') as f:
-            dataset = json.load(f)[:2] #@Debug
+            dataset = json.load(f)[20:100] #@Debug
         
-        for idx, sample in enumerate(dataset):
-            print(f"Processing {idx+1}/{len(dataset)}: {sample['video_id']}")
-            searching_json = transform2Tstar_Json(sample)
+        for idx, sample in enumerate(dataset):      
+            searching_json = Ego4d2Tstar_Json(sample, args)
+            print(f"Processing {idx+1}/{len(dataset)}: {searching_json['video_id']}")
             try:
                 result = process_single_search(args, searching_entry=searching_json, grounder=grounder, yolo_scorer=yolo_interface)
                 
-                print(f"Completed: {searching_json['video_path']}\n")
+                print(f"Completed: {searching_json['video_id']}\n")
             except Exception as e:
-                print(f"Error processing {searching_json['video_path']}: {e}")
+                print(f"Error processing {searching_json['video_id']}: {e}")
                 result = {
-                    "video_path": searching_json.get('video_path', ''),
+                    "video_id": searching_json.get('video_id', ''),
                     "grounding_objects": [],
                     "frame_timestamps": [],
                     "answer": "",

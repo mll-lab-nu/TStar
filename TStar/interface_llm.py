@@ -332,12 +332,26 @@ class TStarUniversalGrounder:
         # 根据预期格式解析响应
         lines = response.split("\n")
         if len(lines) < 2:
-            raise ValueError("Unexpected response format. Could not extract objects.")
+            # print(response)
+            raise ValueError(f"Unexpected response format from inference_query_grounding() --> {response}.")
 
-        target_objects = [obj.strip().replace("1. ", "") for obj in lines[0].split(",") if obj.strip()]
-        cue_objects = [obj.strip().replace("2. ", "") for obj in lines[1].split(",") if obj.strip()]
-        return target_objects, cue_objects
+        target_objects = [self.check_objects_str(obj) for obj in lines[0].split(",") if obj.strip()]
+        cue_objects = [self.check_objects_str(obj) for obj in lines[1].split(",") if obj.strip()]
         
+        return target_objects, cue_objects
+    def check_objects_str(self, obj: str):
+        obj = obj.lower() #小写
+        obj = obj.strip().replace("1. ", "")
+        obj = obj.strip().replace("2. ", "") 
+        obj = obj.strip().replace(".", "")
+        obj = obj.strip().replace("key objects: ", "")
+        obj = obj.strip().replace("cue objects: ", "")
+        obj = obj.strip().replace(": ", "")
+
+        return obj
+
+
+
 
     def inference_qa(
         self,
