@@ -206,7 +206,7 @@ def main():
     if args.json_path:
         # Batch processing
         with open(args.json_path, 'r', encoding='utf-8') as f:
-            dataset = json.load(f)[20:100] #@Debug
+            dataset = json.load(f)[0:100] #@Debug
         
         for idx, sample in enumerate(dataset):      
             searching_json = Ego4d2Tstar_Json(sample, args)

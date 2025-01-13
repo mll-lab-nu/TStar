@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from decord import VideoReader, cpu
 from scipy.interpolate import UnivariateSpline
-
+from PIL import Image
 # Import custom TStar interfaces
 from TStar.interface_llm import TStarUniversalGrounder
 from TStar.interface_yolo import YoloWorldInterface, YoloInterface
@@ -235,6 +235,8 @@ class TStarFramework:
         video_searcher.plot_score_distribution(save_path=plot_path)
         logger.info(f"Score distribution plot saved to {plot_path}")
 
+        # save_P_history as .git
+
     def save_frames(self, frames: List[np.ndarray], timestamps: List[float]):
         """
         Save the retrieved frames as image files.
@@ -263,7 +265,7 @@ class TStarFramework:
         detect_annotot_iters = video_searcher.detect_annotot_iters # iters, b, image
         detect_bbox_iters = video_searcher.detect_bbox_iters #iters, b, n_objects, xxyy, 
             
-        fps = 1  # 设置帧率为 2
+        fps = 1  # 设置帧率为 1
         for b in range(len(image_grid_iters[0])):
             images =  [image_grid_iter[b] for image_grid_iter in image_grid_iters]
             anno_images = [detect_annotot_iter[b] for detect_annotot_iter in detect_annotot_iters] 
@@ -276,6 +278,69 @@ class TStarFramework:
             output_video_path = os.path.join(self.output_dir, f"{question}.gif")  # 视频保存路径
             save_as_gif(images=anno_images, output_gif_path=output_video_path)
 
+            self.save_p_history_as_gif(video_searcher)
+
+
+    def save_p_history_as_gif(self, video_searcher, output_gif_path=None, fps=1):
+        """
+        Save P_history as a GIF, with each iteration represented as a frame.
+
+        Args:
+            video_searcher: Object containing P_history data.
+            output_gif_path: File path to save the GIF.
+            fps: Frames per second for the GIF.
+        """
+        frames = []
+        duration_per_frame = 1000 // fps  # Convert fps to milliseconds
+        question = self.question
+        output_gif_path = os.path.join(self.output_dir, f"{question}_distribution.gif")  # 视频保存路径
+
+        # Create a temporary directory to save individual plots
+        temp_dir = os.path.join(os.path.dirname(output_gif_path), "temp_p_history_frames")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Generate a plot for each iteration in P_history
+        for i, iteration in enumerate(video_searcher.P_history):
+            plt.figure(figsize=(10, 6))
+            plt.plot(iteration, label=f"Iteration {i + 1}")
+            plt.xlabel("Frame Index")
+            plt.ylabel("Value")
+            plt.title(f"P_history Iteration {i + 1}")
+            plt.grid(True)
+            plt.legend()
+
+            # Save the plot as a temporary PNG file
+            temp_file_path = os.path.join(temp_dir, f"frame_{i + 1}.png")
+            plt.savefig(temp_file_path, format='png', dpi=300)
+            plt.close()  # Free memory
+
+            # Add the frame to the list of images for the GIF
+            frames.append(Image.open(temp_file_path))
+
+        # Save all frames as a GIF
+        frames[0].save(
+            output_gif_path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=duration_per_frame,
+            loop=0
+        )
+        print(f"GIF saved to {output_gif_path}")
+
+            # 保存为 GIF
+            # pil_images[0].save(
+            #     output_gif_path, 
+            #     save_all=True, 
+            #     append_images=pil_images[1:], 
+            #     duration=duration, 
+            #     loop=0  # 设置循环播放（0 为无限循环）
+            # )
+            # print(f"Saved GIF: {output_gif_path}")
+
+        # Clean up temporary directory
+        for file in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, file))
+        os.rmdir(temp_dir)
 
 
 def initialize_yolo(
