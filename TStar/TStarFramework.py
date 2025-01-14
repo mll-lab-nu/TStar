@@ -277,9 +277,8 @@ class TStarFramework:
             question = self.question
             output_video_path = os.path.join(self.output_dir, f"{question}.gif")  # 视频保存路径
             save_as_gif(images=anno_images, output_gif_path=output_video_path)
-
-            self.save_p_history_as_gif(video_searcher)
-
+            self.save_score_history_as_gif(video_searcher)
+            self.save_Score_history_as_heatmap_gif(video_searcher)
 
     def save_p_history_as_gif(self, video_searcher, output_gif_path=None, fps=1):
         """
@@ -326,23 +325,152 @@ class TStarFramework:
             loop=0
         )
         print(f"GIF saved to {output_gif_path}")
+        # Clean up temporary directory
+        for file in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, file))
+        os.rmdir(temp_dir)
 
-            # 保存为 GIF
-            # pil_images[0].save(
-            #     output_gif_path, 
-            #     save_all=True, 
-            #     append_images=pil_images[1:], 
-            #     duration=duration, 
-            #     loop=0  # 设置循环播放（0 为无限循环）
-            # )
-            # print(f"Saved GIF: {output_gif_path}")
+    def save_score_history_as_gif(self, video_searcher, output_gif_path=None, fps=1):
+        """
+        Save Score_history as a GIF, with each iteration represented as a frame.
+
+        Args:
+            video_searcher: Object containing Score_history data.
+            output_gif_path: File path to save the GIF.
+            fps: Frames per second for the GIF.
+        """
+        frames = []
+        duration_per_frame = 1000 // fps  # Convert fps to milliseconds
+        question = self.question
+        output_gif_path = os.path.join(self.output_dir, f"{question[:-1]}_score_distribution.gif")  # 视频保存路径
+
+        # Create a temporary directory to save individual plots
+        temp_dir = os.path.join(os.path.dirname(output_gif_path), "temp_score_history_frames")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Generate a plot for each iteration in Score_history
+        for i, iteration in enumerate(video_searcher.Score_history):
+            spline_scores = self.spline_scores(score_distribution=iteration, non_visiting_frames=video_searcher.non_visiting_history[i],
+                                               video_length=video_searcher.total_frame_num)
+            
+
+            plt.figure(figsize=(10, 6))
+            # Highlight sampling points with red dots
+            sampled_indices = [idx for idx, visited in enumerate(video_searcher.non_visiting_history[i]) if visited == 0]
+            sampled_values = [0 for idx in sampled_indices]
+            plt.scatter(sampled_indices, sampled_values, color='red',s=10, label="Sampled Frames")
+
+            plt.plot(spline_scores, label=f"Target Frame Belief")
+
+
+            plt.xlabel("Timeslot (sec)")
+            plt.ylabel("Score Value")
+            plt.title(f"Score_history Iteration {i + 1}")
+            plt.ylim(0, 1)  # Fix y-axis range to 0-1
+            plt.xlim(0, len(spline_scores)+5)  # Fix y-axis range to 0-1
+            plt.grid(True)
+            plt.legend()
+
+            # Save the plot as a temporary PNG file
+            temp_file_path = os.path.join(temp_dir, f"frame_{i + 1}.png")
+            plt.savefig(temp_file_path, format='png', dpi=300)
+            plt.close()  # Free memory
+
+            # Add the frame to the list of images for the GIF
+            frames.append(Image.open(temp_file_path))
+
+        # Save all frames as a GIF
+        frames[0].save(
+            output_gif_path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=duration_per_frame,
+            loop=0
+        )
+        print(f"GIF saved to {output_gif_path}")
 
         # Clean up temporary directory
         for file in os.listdir(temp_dir):
             os.remove(os.path.join(temp_dir, file))
         os.rmdir(temp_dir)
 
+    def spline_scores(self, score_distribution, non_visiting_frames, video_length):
+        # Extract indices and scores of visited frames
+        frame_indices = np.array([idx for idx, visited in enumerate(non_visiting_frames) if visited == 0])
+        observed_scores = np.array([score_distribution[idx] for idx in frame_indices])
 
+        # If no frames have been visited, return uniform distribution
+        if len(frame_indices) == 0:
+            return np.ones(video_length) / video_length
+
+        # Spline interpolation
+        spline = UnivariateSpline(frame_indices, observed_scores, s=0.8)
+        all_frames = np.arange(video_length)
+        spline_scores = spline(all_frames)
+        # spline_scores = spline_scores / spline_scores.sum()
+        return spline_scores
+
+    def save_Score_history_as_heatmap_gif(self, video_searcher, output_gif_path=None, fps=1):
+        """
+        Save Score_history as a heatmap GIF, with each iteration represented as a frame.
+
+        Args:
+            video_searcher: Object containing Score_history data.
+            output_gif_path: File path to save the GIF.
+            fps: Frames per second for the GIF.
+        """
+        frames = []
+        duration_per_frame = 1000 // fps  # Convert fps to milliseconds
+        question = self.question
+        output_gif_path = os.path.join(self.output_dir, f"{question}_score_heatmap.gif")  # 视频保存路径
+
+        # Create a temporary directory to save individual plots
+        temp_dir = os.path.join(os.path.dirname(output_gif_path), "temp_score_heatmap_frames")
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # Generate a heatmap for each iteration in Score_history
+        for i, iteration in enumerate(video_searcher.Score_history):
+            spline_scores = self.spline_scores(score_distribution=iteration, non_visiting_frames=video_searcher.non_visiting_history[i],
+                                               video_length=video_searcher.total_frame_num)
+            
+
+            plt.figure(figsize=(10, 2))
+            
+            # Convert Score_history to a 2D array (e.g., 1 x len(iteration)) for heatmap visualization
+            heatmap_data = np.array([spline_scores])
+            sns.heatmap(heatmap_data, cmap="viridis", cbar=True, xticklabels=False, yticklabels=False, vmin=0, vmax=1)
+
+            plt.title(f"Score History Heatmap - Iteration {i + 1}")
+            plt.xlabel("Frame Index")
+            plt.ylabel("Heatmap")
+
+            # Save the heatmap as a temporary PNG file
+            temp_file_path = os.path.join(temp_dir, f"frame_{i + 1}.png")
+            plt.savefig(temp_file_path, format='png', dpi=300)
+            plt.close()  # Free memory
+
+            # Add the frame to the list of images for the GIF
+            frames.append(Image.open(temp_file_path))
+
+        # Save all frames as a GIF
+        frames[0].save(
+            output_gif_path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=duration_per_frame,
+            loop=0
+        )
+        print(f"Heatmap GIF saved to {output_gif_path}")
+
+        # Clean up temporary directory
+        for file in os.listdir(temp_dir):
+            os.remove(os.path.join(temp_dir, file))
+        os.rmdir(temp_dir)
+
+    def set_to_3D(self):
+
+        pass
+import seaborn as sns
 def initialize_yolo(
     config_path: str,
     checkpoint_path: str,

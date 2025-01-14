@@ -104,11 +104,13 @@ class TStarSearcher:
         self.search_budget = min(1000, self.total_frame_num*search_budget)
 
         # Initialize distributions
-        self.score_distribution = np.zeros(self.total_frame_num)
-        self.P_history = []
+        self.score_distribution = np.zeros(self.total_frame_num) #+ 0.1
         self.non_visiting_frames = np.ones(self.total_frame_num)
         self.P = np.ones(self.total_frame_num) * self.confidence_threshold * 0.3
 
+        self.P_history = []
+        self.Score_history = []
+        self.non_visiting_history  = []
         # Initialize YOLO interface
         self.yolo = yolo_scorer
         self.reset_yolo_vocabulary(target_objects=target_objects, cue_objects=cue_objects)
@@ -284,7 +286,9 @@ class TStarSearcher:
         Stores a copy of the current probability distribution to the history.
         """
         self.P_history.append(copy.deepcopy(self.P).tolist())
-
+        self.Score_history.append(copy.deepcopy(self.score_distribution).tolist())
+        self.non_visiting_history.append(copy.deepcopy(self.non_visiting_frames).tolist())
+    
     def update_top_25_with_window(
         self,
         frame_confidences: List[float],
@@ -428,8 +432,14 @@ class TStarSearcher:
         if num_samples > self.total_frame_num:
             num_samples = self.total_frame_num
 
-        # Adjust probabilities for non-visited frames
+        # Adjust probabilities for visited frames
         _P = (self.P + num_samples / self.total_frame_num) * self.non_visiting_frames
+        # Calculate the threshold for the top 25% frames
+        threshold = np.percentile(_P, 75)  # Get the value at the 75th percentile (top 25%)
+
+        # Filter out frames with scores below the threshold (keep only the top 25%)
+        top_25_mask = _P >= threshold
+        _P = _P * top_25_mask
         _P /= _P.sum()
 
         # Sample frames
