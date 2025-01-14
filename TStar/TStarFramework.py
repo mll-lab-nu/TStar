@@ -354,26 +354,31 @@ class TStarFramework:
                                                video_length=video_searcher.total_frame_num)
             
 
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(10, 3))
             # Highlight sampling points with red dots
             sampled_indices = [idx for idx, visited in enumerate(video_searcher.non_visiting_history[i]) if visited == 0]
-            sampled_values = [0 for idx in sampled_indices]
-            plt.scatter(sampled_indices, sampled_values, color='red',s=10, label="Sampled Frames")
+            sampled_values = [0.01 for idx in sampled_indices]
+            plt.scatter(sampled_indices, sampled_values, color='red',s=20, label="Sampled Frames")
 
             plt.plot(spline_scores, label=f"Target Frame Belief")
 
 
-            plt.xlabel("Timeslot (sec)")
-            plt.ylabel("Score Value")
-            plt.title(f"Score_history Iteration {i + 1}")
+            # Hide X and Y axes
+            #plt.xticks([])  # Remove X-axis ticks
+            #plt.yticks([])  # Remove Y-axis ticks
+            # plt.xlabel("Timeslot (sec)")
+            #plt.ylabel("Score Value", fontsize=14)
+            plt.title(f"Searching Iteration {i + 1}", fontsize=14 )
             plt.ylim(0, 1)  # Fix y-axis range to 0-1
             plt.xlim(0, len(spline_scores)+5)  # Fix y-axis range to 0-1
             plt.grid(True)
-            plt.legend()
+            plt.legend(fontsize=12, loc="upper right")
+            # Completely remove axes, grid, and borders
+            #plt.axis('off')
 
             # Save the plot as a temporary PNG file
             temp_file_path = os.path.join(temp_dir, f"frame_{i + 1}.png")
-            plt.savefig(temp_file_path, format='png', dpi=300)
+            plt.savefig(temp_file_path, format='png', dpi=300, transparent=False, bbox_inches="tight", pad_inches=0)
             plt.close()  # Free memory
 
             # Add the frame to the list of images for the GIF
@@ -419,6 +424,7 @@ class TStarFramework:
             output_gif_path: File path to save the GIF.
             fps: Frames per second for the GIF.
         """
+
         frames = []
         duration_per_frame = 1000 // fps  # Convert fps to milliseconds
         question = self.question
@@ -434,19 +440,19 @@ class TStarFramework:
                                                video_length=video_searcher.total_frame_num)
             
 
-            plt.figure(figsize=(10, 2))
+            plt.figure(figsize=(16, 1.5))
             
             # Convert Score_history to a 2D array (e.g., 1 x len(iteration)) for heatmap visualization
             heatmap_data = np.array([spline_scores])
-            sns.heatmap(heatmap_data, cmap="viridis", cbar=True, xticklabels=False, yticklabels=False, vmin=0, vmax=1)
+            sns.heatmap(heatmap_data, cmap="viridis", cbar=True, xticklabels=False, yticklabels=False, vmin=0, vmax=1, cbar_kws={"label": "", "shrink": 0.8})  # Adjust colorbar size and label)
 
-            plt.title(f"Score History Heatmap - Iteration {i + 1}")
-            plt.xlabel("Frame Index")
-            plt.ylabel("Heatmap")
+            #plt.title(f"Score History Heatmap - Iteration {i + 1}")
+            #plt.xlabel("Frame Index in Video (sec)", fontsize=14)
+            #plt.ylabel("Heatmap Score", fontsize=14)
 
             # Save the heatmap as a temporary PNG file
             temp_file_path = os.path.join(temp_dir, f"frame_{i + 1}.png")
-            plt.savefig(temp_file_path, format='png', dpi=300)
+            plt.savefig(temp_file_path, format='png', dpi=300, transparent=True, bbox_inches="tight", pad_inches=0)
             plt.close()  # Free memory
 
             # Add the frame to the list of images for the GIF
@@ -466,6 +472,7 @@ class TStarFramework:
         for file in os.listdir(temp_dir):
             os.remove(os.path.join(temp_dir, file))
         os.rmdir(temp_dir)
+
 
     def set_to_3D(self):
 

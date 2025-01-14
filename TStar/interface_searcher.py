@@ -484,9 +484,11 @@ class TStarSearcher:
             if target in detected_objects:
                 frame_idx = int(frame_sec * self.raw_fps / self.fps)
                 # Read the individual frame
-                _, frame = self.read_frame_batch(self.video_path, [frame_idx])
-                frame = frame[0]  # Extract the frame from the list
+                _, frames = self.read_frame_batch(self.video_path, [frame_idx])
                 
+                
+                resized_frames = [cv2.resize(frame, (160*2, 120*2)) for frame in frames]  # Resize to 160x120
+                frame = resized_frames[0]  # Extract the frame from the list
                 # Perform detection on the individual frame
                 single_confidence_maps, single_detected_objects_maps = self.score_image_grids(
                     [frame], (1, 1)
@@ -495,14 +497,14 @@ class TStarSearcher:
                 single_detected_objects = single_detected_objects_maps[0][0]
                 self.score_distribution[frame_sec] = single_confidence
 
+                self.image_grid_iters.append([frame])
+                self.detect_annotot_iters.append(self.yolo.bbox_visualization(images=[frame], detections_inbatch=self.yolo.detections_inbatch))
+                self.detect_bbox_iters.append(self.yolo.detections_inbatch)
+                
                 # Check if target object confidence exceeds the threshold
                 if target in single_detected_objects and single_confidence > confidence_threshold:
                     self.remaining_targets.remove(target)
                     print(f"Found target '{target}' in frame {frame_idx}, score {single_confidence:.2f}")
-                    self.image_grid_iters.append([frame])
-                    self.detect_annotot_iters.append(self.yolo.bbox_visualization(images=[frame], detections_inbatch=self.yolo.detections_inbatch))
-                    self.detect_bbox_iters.append(self.yolo.detections_inbatch)
-                    
                     return True
 
         return False
