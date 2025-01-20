@@ -206,10 +206,13 @@ def main():
     if args.json_path:
         # Batch processing
         with open(args.json_path, 'r', encoding='utf-8') as f:
-            dataset = json.load(f)[0:100] #@Debug
+            dataset = json.load(f)[20:100] #@Debug
         
         for idx, sample in enumerate(dataset):      
             searching_json = Ego4d2Tstar_Json(sample, args)
+            # if searching_json['video_id'] != "d0230ced-05b0-4cf0-93cb-e5ba78f36047":
+            #     continue
+
             print(f"Processing {idx+1}/{len(dataset)}: {searching_json['video_id']}")
             try:
                 result = process_single_search(args, searching_entry=searching_json, grounder=grounder, yolo_scorer=yolo_interface)

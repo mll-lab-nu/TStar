@@ -276,11 +276,87 @@ def render_frames_in_3d(video_path, output_path, num_frames=10, x_angle=290, y_a
     # Display the result
     plt.show()
 
+import cv2
+import os
+def extract_frames(video_path, output_dir, fps=1):
+    """
+    Extract frames from a video at a specified frame rate (1 fps by default).
+
+    Args:
+        video_path (str): Path to the video file.
+        output_dir (str): Directory to save extracted frames.
+        fps (int): Frames per second to extract.
+    """
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Open the video file
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Cannot open video: {video_path}")
+
+    # Get video properties
+    video_fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_interval = int(video_fps // fps)  # Interval in frames
+
+    frame_count = 0
+    saved_count = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Save frame if it matches the interval
+        if frame_count % frame_interval == 0:
+            frame_filename = os.path.join(output_dir, f"frame_{saved_count:04d}.jpg")
+            cv2.imwrite(frame_filename, frame)
+            print(f"Saved: {frame_filename}")
+            saved_count += 1
+
+        frame_count += 1
+
+    cap.release()
+    print(f"Total frames saved: {saved_count}")
+
+
+import os
+import imageio
+from PIL import Image
+
+def extract_frames_from_gif(input_gif_path, output_dir):
+    # 打开GIF文件
+    gif = imageio.mimread(input_gif_path)
+
+    # 获取GIF的文件名，不包括扩展名
+    base_name = os.path.basename(input_gif_path).split('.')[0]
+
+    # 创建输出目录，如果不存在的话
+    output_subdir = os.path.join(output_dir, base_name)
+    os.makedirs(output_subdir, exist_ok=True)
+
+    # 保存每一帧到输出目录
+    for i, frame in enumerate(gif):
+        frame_image = Image.fromarray(frame)  # 转换为PIL图片对象
+        frame_filename = os.path.join(output_subdir, f"frame_{i + 1}.png")
+        frame_image.save(frame_filename)
+
+        print(f"Saved frame {i + 1} to {frame_filename}")
 
 if __name__ == "__main__":
     # Example usage
-    video_path = "./Datasets/ego4d/ego4d_data/v1/256p/38737402-19bd-4689-9e74-3af391b15feb.mp4" # Replace with your video file path
-    output_path = "output_3d_strip.png"
-    # process_video_frames(video_path, output_path)
-    render_frames_in_3d(video_path, output_path, num_frames=10, x_angle=10, y_angle=20, z_angle=10)
+    # Define paths
+    # video_path = "/home/guoweiyu/new-VL-Haystack/VL-Haystack/output/03e90bbc-7d6b-423c-84d9-b5be3eff11c5/03e90bbc-7d6b-423c-84d9-b5be3eff11c5.mp4"
+    # output_dir = os.path.join(os.path.dirname(video_path), "frame_1fps")
+
+    # # Extract frames at 1 fps
+    # extract_frames(video_path, output_dir, fps=1)
+
+    # 输入GIF路径和输出目录
+
+    input_gif_path = "output/38737402-19bd-4689-9e74-3af391b15feb/Where was the white trash can before I raised it?_score_heatmap.gif"
+    output_dir = "output/38737402-19bd-4689-9e74-3af391b15feb"
+
+    # 提取并保存GIF的每一帧
+    extract_frames_from_gif(input_gif_path, output_dir)
 

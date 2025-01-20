@@ -253,7 +253,7 @@ class TStarSearcher:
             raise ValueError("Frame count does not match grid dimensions")
 
         # Resize frames to fit the grid
-        resized_frames = [cv2.resize(frame, (160, 120)) for frame in frames]  # Resize to 160x120
+        resized_frames = [cv2.resize(frame, (198, 95)) for frame in frames]  # Resize to 160x120
         grid_rows = [np.hstack(resized_frames[i * cols:(i + 1) * cols]) for i in range(rows)]
         return np.vstack(grid_rows)
 
@@ -432,23 +432,35 @@ class TStarSearcher:
         if num_samples > self.total_frame_num:
             num_samples = self.total_frame_num
 
-        # Adjust probabilities for visited frames
-        _P = (self.P + num_samples / self.total_frame_num) * self.non_visiting_frames
-        # Calculate the threshold for the top 25% frames
-        threshold = np.percentile(_P, 75)  # Get the value at the 75th percentile (top 25%)
+        if len(self.Score_history) == 0:  # If Score_history is empty, use uniform sampling with equal intervals
+            # Ensure the frames are sampled with equal intervals
+            interval = self.total_frame_num // num_samples  # Calculate the interval between frames
+            sampled_frame_secs = np.arange(0, self.total_frame_num, interval)[:num_samples]  # Generate indices with equal intervals
+            # If we have less samples than requested, we need to select the remaining samples in a way that doesn't exceed total_frame_num
+            if len(sampled_frame_secs) < num_samples:
+                # Add the last frame if not enough frames were selected
+                sampled_frame_secs = np.append(sampled_frame_secs, self.total_frame_num - 1)
 
-        # Filter out frames with scores below the threshold (keep only the top 25%)
-        top_25_mask = _P >= threshold
-        _P = _P * top_25_mask
-        _P /= _P.sum()
+        else:
+            # Adjust probabilities for visited frames
+            _P = (self.P + num_samples / self.total_frame_num) * self.non_visiting_frames
+            # Calculate the threshold for the top 25% frames
+            threshold = np.percentile(_P, 75)  # Get the value at the 75th percentile (top 25%)
 
-        # Sample frames
-        sampled_frame_secs = np.random.choice(
-            self.total_frame_num,
-            size=num_samples,
-            replace=False,
-            p=_P
-        )
+            # Filter out frames with scores below the threshold (keep only the top 25%)
+            top_25_mask = _P >= threshold
+            _P = _P * top_25_mask
+            _P /= _P.sum()
+
+            # Sample frames based on the adjusted probabilities
+            sampled_frame_secs = np.random.choice(
+                self.total_frame_num,
+                size=num_samples,
+                replace=False,
+                p=_P
+            )
+
+        # Convert sampled frame seconds to frame indices
         sampled_frame_indices = [int(sec * self.raw_fps / self.fps) for sec in sampled_frame_secs]
 
         # Read frames
@@ -457,7 +469,7 @@ class TStarSearcher:
             frame_indices=sampled_frame_indices
         )
 
-        resized_frames = [cv2.resize(frame, (160*4, 120*4)) for frame in frames]  # Resize to 160x120
+        resized_frames = [cv2.resize(frame, (198*4, 95*4)) for frame in frames]  # Resize to 160x120
 
         return sampled_frame_secs.tolist(), resized_frames
 
@@ -487,7 +499,7 @@ class TStarSearcher:
                 _, frames = self.read_frame_batch(self.video_path, [frame_idx])
                 
                 
-                resized_frames = [cv2.resize(frame, (160*2, 120*2)) for frame in frames]  # Resize to 160x120
+                resized_frames = [cv2.resize(frame, (198*3, 95*3)) for frame in frames]  # Resize to 160x120
                 frame = resized_frames[0]  # Extract the frame from the list
                 # Perform detection on the individual frame
                 single_confidence_maps, single_detected_objects_maps = self.score_image_grids(

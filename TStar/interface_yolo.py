@@ -13,6 +13,8 @@ import supervision as sv
 from typing import Dict, Optional, Sequence, List
 
 import supervision as sv
+from supervision.draw.color import Color, ColorPalette
+
 class LabelAnnotator(sv.LabelAnnotator):
 
     @staticmethod
@@ -41,7 +43,9 @@ class YoloInterface:
         # MASK_ANNOTATOR = sv.MaskAnnotator()
         self.LABEL_ANNOTATOR = LabelAnnotator(text_padding=4,
                                         text_scale=0.5,
-                                        text_thickness=1)
+                                        text_thickness=1,
+                                        smart_position=True,
+                                        color=ColorPalette.LEGACY)
 
 class YoloWorldInterface(YoloInterface):
     def __init__(self, config_path: str, checkpoint_path: str, device: str = "cuda:0"):

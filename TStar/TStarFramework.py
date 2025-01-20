@@ -27,6 +27,7 @@ from TStar.interface_llm import TStarUniversalGrounder
 from TStar.interface_yolo import YoloWorldInterface, YoloInterface
 from TStar.interface_searcher import TStarSearcher
 from TStar.utilites import save_as_gif
+from matplotlib.lines import Line2D
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -342,43 +343,82 @@ class TStarFramework:
         frames = []
         duration_per_frame = 1000 // fps  # Convert fps to milliseconds
         question = self.question
-        output_gif_path = os.path.join(self.output_dir, f"{question[:-1]}_score_distribution.gif")  # 视频保存路径
+        output_gif_path = os.path.join(self.output_dir, f"{question[:-1]}_score_distribution.gif")
 
         # Create a temporary directory to save individual plots
         temp_dir = os.path.join(os.path.dirname(output_gif_path), "temp_score_history_frames")
         os.makedirs(temp_dir, exist_ok=True)
 
         # Generate a plot for each iteration in Score_history
+        # Insert initial score history (a list of 0.2) at the beginning of the Score_history
+        initial_score = [0.2] * video_searcher.total_frame_num  # Assuming each Score_history entry has 'total_frame_num' values
+        video_searcher.Score_history.insert(0, initial_score)
+        # Duplicate the last element in non_visiting_history
+        video_searcher.non_visiting_history.append(video_searcher.non_visiting_history[-1])
+        
         for i, iteration in enumerate(video_searcher.Score_history):
             spline_scores = self.spline_scores(score_distribution=iteration, non_visiting_frames=video_searcher.non_visiting_history[i],
-                                               video_length=video_searcher.total_frame_num)
-            
+                                            video_length=video_searcher.total_frame_num)
 
-            plt.figure(figsize=(10, 3))
-            # Highlight sampling points with red dots
+            plt.figure(figsize=(10, 2))
+
+            # Highlight sampling points with orange dots (RGB: 250, 127, 11)
             sampled_indices = [idx for idx, visited in enumerate(video_searcher.non_visiting_history[i]) if visited == 0]
             sampled_values = [0.01 for idx in sampled_indices]
-            plt.scatter(sampled_indices, sampled_values, color='red',s=20, label="Sampled Frames")
+            curr_visiting_values = sampled_values
+            curr_visiting_indices = sampled_indices
+            sampled_plot = plt.scatter(sampled_indices, sampled_values, color=(153/255, 153/255, 153/255), s=20, label="History Sampled Frames")
+            if i>0:
+                curr_visiting_indices = [idx for idx, visited in enumerate(video_searcher.non_visiting_history[i]) if visited == 0 
+                                         and video_searcher.non_visiting_history[i-1][idx] == 1]
+                curr_visiting_values = [0.01 for idx in curr_visiting_indices]
+            if i == len(video_searcher.Score_history) - 1:
+                # Get the last score distribution (probabilities)
+                last_score_distribution = video_searcher.Score_history[-1]
+                
+                # Normalize the distribution (in case it isn't already a valid probability distribution)
+                last_score_distribution = np.array(last_score_distribution)
+                last_score_distribution /= last_score_distribution.sum()  # Normalize to sum to 1
 
-            plt.plot(spline_scores, label=f"Target Frame Belief")
+                # Randomly select 8 indices based on the last score distribution
+                curr_visiting_indices = np.random.choice(len(last_score_distribution), size=8, replace=False, p=last_score_distribution)
+                curr_visiting_values = [0.01 for idx in curr_visiting_indices]
+                pass
+                
+                
+            visiting_plot = plt.scatter(curr_visiting_indices, curr_visiting_values, color=(250/255, 127/255, 11/255), s=20, label="Current Visiting Frames")
 
 
-            # Hide X and Y axes
-            #plt.xticks([])  # Remove X-axis ticks
-            #plt.yticks([])  # Remove Y-axis ticks
-            # plt.xlabel("Timeslot (sec)")
-            #plt.ylabel("Score Value", fontsize=14)
-            plt.title(f"Searching Iteration {i + 1}", fontsize=14 )
+            # Plot the target frame belief line with blue color (RGB: 130, 176, 210)
+            line_plot, = plt.plot(spline_scores, color=(130/255, 176/255, 210/255), label=f"Target Frame Distribution")
+            # Create a custom legend line with a shorter length
+            legend_line = Line2D([0], [0], color=(130/255, 176/255, 210/255), lw=2, label="Target Frame Distribution")
+
+            # Set a lighter color for the ticks and spines
+            plt.tick_params(axis='both', colors='lightgray')  # Set tick color to light gray
+            plt.gca().spines['top'].set_color('lightgray')    # Set top spine color
+            plt.gca().spines['right'].set_color('lightgray')  # Set right spine color
+            plt.gca().spines['left'].set_color('lightgray')   # Set left spine color
+            plt.gca().spines['bottom'].set_color('lightgray') # Set bottom spine color
+
+            # Set coordinate label colors to gray
+            plt.tick_params(axis='both', labelcolor='gray')  # Set tick labels color to gray
+
+            # Title and axis settings
+            #plt.title(f"Searching Iteration {i + 1}", fontsize=14)
             plt.ylim(0, 1)  # Fix y-axis range to 0-1
-            plt.xlim(0, len(spline_scores)+5)  # Fix y-axis range to 0-1
-            plt.grid(True)
-            plt.legend(fontsize=12, loc="upper right")
-            # Completely remove axes, grid, and borders
-            #plt.axis('off')
+            plt.xlim(0, len(spline_scores)+5)  # Fix x-axis range
+
+            # Set grid to light gray for a subtle look
+            plt.grid(True, linestyle='--', color='lightgray', alpha=0.5)
+            
+            # plt.legend(fontsize=12, loc="upper right")
+            # Custom legend
+            plt.legend(handles=[sampled_plot, visiting_plot, legend_line], fontsize=12, loc="upper right",labelcolor='gray')
 
             # Save the plot as a temporary PNG file
             temp_file_path = os.path.join(temp_dir, f"frame_{i + 1}.png")
-            plt.savefig(temp_file_path, format='png', dpi=300, transparent=False, bbox_inches="tight", pad_inches=0)
+            plt.savefig(temp_file_path, format='png', dpi=300, transparent=False, bbox_inches="tight", pad_inches=0.2)
             plt.close()  # Free memory
 
             # Add the frame to the list of images for the GIF
