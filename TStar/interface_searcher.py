@@ -253,7 +253,7 @@ class TStarSearcher:
             raise ValueError("Frame count does not match grid dimensions")
 
         # Resize frames to fit the grid
-        resized_frames = [cv2.resize(frame, (198, 95)) for frame in frames]  # Resize to 160x120
+        resized_frames = [cv2.resize(frame, (200, 95)) for frame in frames]  # Resize to 160x120
         grid_rows = [np.hstack(resized_frames[i * cols:(i + 1) * cols]) for i in range(rows)]
         return np.vstack(grid_rows)
 
@@ -452,6 +452,14 @@ class TStarSearcher:
             _P = _P * top_25_mask
             _P /= _P.sum()
 
+            # Check if we have enough non-zero entries in the probability distribution
+            non_zero_entries = np.count_nonzero(_P)
+            if non_zero_entries < num_samples:
+                # If not enough non-zero entries, adjust threshold or sample from all frames
+                print(f"Warning: Not enough non-zero entries, adjusting threshold to sample {num_samples} frames.")
+                _P =  (self.P + num_samples / self.total_frame_num) 
+                _P /= _P.sum()
+
             # Sample frames based on the adjusted probabilities
             sampled_frame_secs = np.random.choice(
                 self.total_frame_num,
@@ -459,7 +467,6 @@ class TStarSearcher:
                 replace=False,
                 p=_P
             )
-
         # Convert sampled frame seconds to frame indices
         sampled_frame_indices = [int(sec * self.raw_fps / self.fps) for sec in sampled_frame_secs]
 
@@ -469,7 +476,7 @@ class TStarSearcher:
             frame_indices=sampled_frame_indices
         )
 
-        resized_frames = [cv2.resize(frame, (198*4, 95*4)) for frame in frames]  # Resize to 160x120
+        resized_frames = [cv2.resize(frame, (200*4, 95*4)) for frame in frames]  # Resize to 160x120
 
         return sampled_frame_secs.tolist(), resized_frames
 
@@ -499,7 +506,7 @@ class TStarSearcher:
                 _, frames = self.read_frame_batch(self.video_path, [frame_idx])
                 
                 
-                resized_frames = [cv2.resize(frame, (198*3, 95*3)) for frame in frames]  # Resize to 160x120
+                resized_frames = [cv2.resize(frame, (200*3, 95*3)) for frame in frames]  # Resize to 160x120
                 frame = resized_frames[0]  # Extract the frame from the list
                 # Perform detection on the individual frame
                 single_confidence_maps, single_detected_objects_maps = self.score_image_grids(
@@ -555,6 +562,7 @@ class TStarSearcher:
         Returns:
             Tuple[List[np.ndarray], List[float]]: Extracted keyframes and their timestamps.
         """
+        
         K = self.search_nframes  # Number of keyframes to find
             # Estimate the total number of iterations based on search_budget and frames per iteration
         video_length = int(self.total_frame_num)

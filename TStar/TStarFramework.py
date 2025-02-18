@@ -111,6 +111,7 @@ class TStarFramework:
         Execute the complete video search and question-answering process.
         """
         # Use Grounder to get target and cue objects
+        # 通过简单的prompt, 以文本和video作为输入，使用gpt选择出目标object和相关project
         target_objects, cue_objects = self.get_grounded_objects()
 
         # Initialize TStarSearcher
@@ -484,7 +485,10 @@ class TStarFramework:
             
             # Convert Score_history to a 2D array (e.g., 1 x len(iteration)) for heatmap visualization
             heatmap_data = np.array([spline_scores])
-            sns.heatmap(heatmap_data, cmap="viridis", cbar=True, xticklabels=False, yticklabels=False, vmin=0, vmax=1, cbar_kws={"label": "", "shrink": 0.8})  # Adjust colorbar size and label)
+            # sns.heatmap(heatmap_data, cmap="viridis", cbar=True, xticklabels=False, yticklabels=False, vmin=0, vmax=1, cbar_kws={"label": "", "shrink": 0.8})  # Adjust colorbar size and label)
+
+            # Remove vmin, vmax, and cbar_kws for cleaner heatmap visualization
+            sns.heatmap(heatmap_data, cmap="viridis", cbar=False, xticklabels=False, yticklabels=False)
 
             #plt.title(f"Score History Heatmap - Iteration {i + 1}")
             #plt.xlabel("Frame Index in Video (sec)", fontsize=14)

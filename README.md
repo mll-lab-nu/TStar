@@ -115,77 +115,7 @@ To process your own dataset with VL-Haystack, you need to prepare a JSON file de
 ```python
 python TStar/val_LV_Haystack.py \
 ```
-
-
-### Output Format
-
-After running the script, the '''output.json''' file will be updated with the following keys:
-
-<details>
-  <summary>Click to expand output examples!</summary>
-[
-    {
-        "file_name": "example_video.mp4",
-        "question": "What is the color of the couch?",
-        "choices": { },
-        "predicted_answer": "B",
-        "frame_indexes": [10, 50, 100],
-        "predicted_timestamps": [0.33, 1.67, 3.33],
-        "estimated_frame_distribution": [0.01, 0.0, ..., 0.1]
-    },
-]
-</details>
-
- Use the predicted_timestamps or sampling from estimated_frame_distribution as inputs for tasks like Video QA.
-
-
-
- \begin{table}[ht]
-    \centering
-    \setlength\tabcolsep{3pt} % Reduce horizontal padding between columns
-    \setlength\extrarowheight{1pt} % Reduce vertical padding between rows
-    \arrayrulecolor[gray]{0.7} % Set a light gray color for the borders
-    \begin{adjustbox}{width=0.98\linewidth}
-    \begin{tabular}{l|c|c|c|c|c}
-        \toprule
-        \multicolumn{6}{c}{\bf LongVideoBench} \\
-        \cmidrule{1-6}
-        
-        \multirow{3}{*}{\bf Model and Size} & \multirow{3}{*}{\bf \#Frame} & \multicolumn{4}{c}{\textbf{Video Length}} \\
-        & & \textbf{XLong} & \textbf{Long} & \textbf{Medium} & \textbf{Short} \\
-        & & 15-60min & 2-10min & 15-60s & 8-15s \\
-
-        \midrule
-        
-        GPT4o & 8 & 47.1 & 49.4 & 67.3 & 69.7 \\
-        \rowcolor{gray!10}
-        GPT4o + {\fancy} & 8 & \textbf{51.9 / 51.2} & \textbf{52.4 / 51.0} & \textbf{72.7 / 73.0} & \textbf{70.0/ 70.3} \\
-        \arrayrulecolor{gray!40}\hline \arrayrulecolor{black}
-
-        LLaVA-OneVision-72B & 8 & 53.7 & 57.4 & 74.1 & 73.0 \\
-        \rowcolor{gray!10}
-        LLaVA-OneVision-72B + {\fancy} & 8 & \textbf{55.5 / 55.0} & \textbf{63.7/ 63.3} & \textbf{76.3 / 76.9 } & \textbf{73.5 / 73.9} \\
-
-        \midrule
-        GPT4o & 32 & 50.5 & 57.3 & 73.5 & 71.4 \\
-        \rowcolor{gray!10}
-        GPT4o + {\fancy} & 32 & \textbf{53.1 / 53.4} & \textbf{59.4 / 59} & \textbf{74.3/ 74.3} & \textbf{71.4, 71.4} \\
-        \arrayrulecolor{gray!40}\hline \arrayrulecolor{black}
-
-        LLaVA-OneVision-72B & 32 & 56.5 & 61.6 & 77.4 & 74.3 \\
-        \rowcolor{gray!10}
-        LLaVA-OneVision-72B + {\fancy} & 32 & \textbf{62.4 / 62.7} & \textbf{64.1/ 63.7} & \textbf{79.3 / 79.3} & \textbf{74.6 / 74.6} \\
-
-        \bottomrule
-    \end{tabular}
-    \end{adjustbox}
-    \caption{
-    Extrinsic evaluation results for $T^*$ as an additional frame selection module for VLMs on LongVideoBench. The metric is QA accuracy (\%). We run {\fancy} three times and report average accuracy and Standard Deviation.
-    }
-    \label{tab:longvideobench_results}    
-\end{table}
-
-
+ 
 
 # Jinhui
 

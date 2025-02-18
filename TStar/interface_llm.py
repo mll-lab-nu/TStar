@@ -49,9 +49,11 @@ class LlavaInterface:
         system_message: 系统提示
         其它参数根据需要自行添加
         """
+        
         # 模拟推理逻辑，需要你自己实现
         print("[LlavaInterface] Inference called with query:", query)
         print("[LlavaInterface] frames count:", len(frames) if frames else 0)
+
         # 真实场景下，你会调用 Llava 模型进行推理
         return "Fake Response from LlavaInterface"
     
@@ -380,6 +382,30 @@ class TStarUniversalGrounder:
         )
         return response.strip()
 
+    def inference_openend_qa(
+        self,
+        frames: List[Image.Image],
+        question: str,
+        # options: str,
+        temperature: float = 0.2,
+        max_tokens: int = 2048
+    ) -> str:
+        """
+        多选推理，返回最可能的选项（如 A、B、C、D）。
+        """
+        system_prompt = (
+            "Answer with the question in short based on the video.\n"
+            + "\n".join(["<image>"] * len(frames))  
+            + f"\nQuestion: {question}\n"
+        )
+
+        response = self.VLM_model_interfance.inference_with_frames_all_in_one(
+            query=system_prompt,
+            frames=frames,
+            temperature=temperature,
+            max_tokens=30
+        )
+        return response.strip()
 
 if __name__ == "__main__":
     """

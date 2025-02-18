@@ -321,28 +321,42 @@ def extract_frames(video_path, output_dir, fps=1):
 
 
 import os
-import imageio
+import imageio.v3 as imageio
 from PIL import Image
 
 def extract_frames_from_gif(input_gif_path, output_dir):
-    # 打开GIF文件
-    gif = imageio.mimread(input_gif_path)
+    """
+    Extract frames from a GIF file and save them as individual PNG files.
 
-    # 获取GIF的文件名，不包括扩展名
+    Args:
+        input_gif_path (str): Path to the input GIF file.
+        output_dir (str): Path to the directory where frames will be saved.
+    """
+    # Get the base name of the GIF (without extension)
     base_name = os.path.basename(input_gif_path).split('.')[0]
 
-    # 创建输出目录，如果不存在的话
+    # Create a subdirectory to save frames
     output_subdir = os.path.join(output_dir, base_name)
     os.makedirs(output_subdir, exist_ok=True)
 
-    # 保存每一帧到输出目录
-    for i, frame in enumerate(gif):
-        frame_image = Image.fromarray(frame)  # 转换为PIL图片对象
-        frame_filename = os.path.join(output_subdir, f"frame_{i + 1}.png")
-        frame_image.save(frame_filename)
+    # Open the GIF for frame extraction
+    with imageio.imopen(input_gif_path, "r", plugin="pillow") as gif:
+        i = 0
+        for frame in gif.iter():
+            # Convert the frame to a PIL Image
+            frame_image = Image.fromarray(frame)
 
-        print(f"Saved frame {i + 1} to {frame_filename}")
+            # Define the output file name for the frame
+            frame_filename = os.path.join(output_subdir, f"frame_{i + 1}.png")
 
+            # Save the frame as a PNG file
+            frame_image.save(frame_filename)
+            print(f"Saved frame {i + 1} to {frame_filename}")
+            i += 1
+
+    print(f"All frames have been extracted to {output_subdir}")
+
+    
 if __name__ == "__main__":
     # Example usage
     # Define paths
@@ -354,7 +368,7 @@ if __name__ == "__main__":
 
     # 输入GIF路径和输出目录
 
-    input_gif_path = "output/38737402-19bd-4689-9e74-3af391b15feb/Where was the white trash can before I raised it?_score_heatmap.gif"
+    input_gif_path = "output/38737402-19bd-4689-9e74-3af391b15feb/Who did I talk to in  the living room_score_distribution.gif"
     output_dir = "output/38737402-19bd-4689-9e74-3af391b15feb"
 
     # 提取并保存GIF的每一帧

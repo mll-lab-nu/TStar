@@ -1,4 +1,3 @@
-
 import os
 import sys
 import cv2
@@ -41,11 +40,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--prefix', type=str, default='stitched_image', help='Prefix for output filenames.')
     return parser.parse_args()
 
-
 def main():
     """
     Main function to execute TStarSearcher.
     """
+    # os.environ['OPENAI_API_KEY'] = 'sk-QeYl4dgQWWCZVpft00D08560A33644F7A2D66b4406A7De96'
+    os.environ['OPENAI_API_KEY'] = 'sk-QeYl4dgQWWCZVpft00D08560A33644F7A2D66b4406A7De96'
     args = parse_arguments()
 
     # Initialize Grounder

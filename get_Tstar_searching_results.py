@@ -14,7 +14,7 @@ def Ego4d2Tstar_Json(entry: dict, args) -> dict:
     Output json
         [
             {
-                "video_path": "path/to/video1.mp4",
+                "video_path": "path/to/video1.mp4", 
                 "question": "What is the color of my couch?",
                 "options": "A) Red\nB) Black\nC) Green\nD) White\n"
             },
@@ -79,7 +79,6 @@ from TStar.interface_yolo import YoloInterface
 from TStar.interface_searcher import TStarSearcher
 from TStar.TStarFramework import TStarFramework, initialize_yolo  # better to keep interfaces separate for readability
 
-
 def parse_arguments() -> argparse.Namespace:
     """
     Parse command-line arguments.
@@ -106,7 +105,6 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--output_dir', type=str, default='./output', help='Directory to save outputs.')
     parser.add_argument('--prefix', type=str, default='stitched_image', help='Prefix for output filenames.')
     return parser.parse_args()
-
 
 def process_single_search(args, searching_entry,
         yolo_scorer: YoloInterface,
@@ -210,8 +208,8 @@ def main():
         
         for idx, sample in enumerate(dataset):      
             searching_json = Ego4d2Tstar_Json(sample, args)
-            # if searching_json['video_id'] != "d0230ced-05b0-4cf0-93cb-e5ba78f36047":
-            #     continue
+            if searching_json['video_id'] != "38737402-19bd-4689-9e74-3af391b15feb":
+                continue
 
             print(f"Processing {idx+1}/{len(dataset)}: {searching_json['video_id']}")
             try:
