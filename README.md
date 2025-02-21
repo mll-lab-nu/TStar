@@ -61,17 +61,15 @@ python run_TStar_Demo_onVideo.py \
 ```
 
 
-## Test LV-HayStack
+## Test on LV-HayStack
 To evaluate T* on a dataset (e.g., LV-Haystack), use the following command:
 
 ```bash
-# 
 bash ./eval_LV_Haystack.sh
-
 ```
 </details>
 
-### Searching KeyFrame for Your Dataset
+### Running T* on Your Dataset
 
 To process your own dataset with T*, you need to prepare a JSON file describing the dataset. The JSON file should follow the format below:
 <details>
@@ -104,12 +102,12 @@ To process your own dataset with T*, you need to prepare a JSON file describing 
 ```
 </details>
 
+Once your dataset is prepared, you can run TStar to perform keyframe searching. Use the following command:
 
 <details>
   <summary>Click to expand python script!</summary>
   
 ```python
-# 
 python HaystackBench/run_TStar_onDataset.py \
     --input_json path_to_your_annotations.json \
     --output_json path_to_your_annotations_Tstar_frames.json \
