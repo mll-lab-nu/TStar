@@ -1,11 +1,11 @@
 # TStar: A Unified KeyFrame Searching Framework for Video Question Answering
 
-**TStar** is a comprehensive framework designed to integrate **KeyFrame Searching** into Vision-Language Models (VLMs) to enhance Video Question Answering (VQA). By leveraging efficient keyframe searching, TStar dynamically identifies relevant frames in videos, enabling state-of-the-art VLMs like **LLaVA** to achieve improved performance in understanding and reasoning over video data.
+**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision and GPT-4o to understand and reason over video data.
 
 ## Features
-- **Keyframe Searching**: Dynamically detects and extracts relevant keyframes.
-- **Modular Design**: Easily integrates various grounding and searching backends.
-- **Efficient Video QA**: Combines T* searching with advanced VQA.
+- **Iteratively Searching**: Iteratively identifies and focuses on the most relevant visual information in videos based on the question being asked.
+- **Plug-in**: Easily integrates various grounding and searching backends.
+- **Efficient Video QA**: Combines T* keyframe search with advanced video question answering capabilities.
 
 ---
 
@@ -14,40 +14,44 @@
 
 ```bash
 ## Follow docs/installation to implemet Grounding (e.g., LLaVA) and Searching (e.g., YOLO) Function
-###  Install Query Grounder Interface(LLaVA or GPT-API)
-git clone https://github.com/LLaVA-VL/LLaVA-NeXT
+###  Install Query Grounder Interface(LLaVA or GPT-API) 
+### Optional if you test with GPT4o
+git clone https://github.com/LLaVA-VL/LLaVA-NeXT  
+
 ### Install Image Grid Scorer Interface e.g., YOLO-WORLD
 git clone --recursive https://github.com/AILab-CVC/YOLO-World.git
 ```
 
 ### Structure:
 ```bash
-VL-Haystack/
-├── LLaVA-NeXT/                # Query grounding and QA interface (LLaVA or skip by using GPT-4o-API)
-├── YOLO-World/                # Heuristic-based image scoring and searching (YOLO)
-├── TStar/                     # Core T* searching and framework integration
-│   ├── interface_llm.py       # LLM-based interface for question grounding and answering
-│   ├── interface_yolo.py      # YOLO-based object detection interface
-│   ├── interface_searcher.py  # Searching logic for T* heuristic processing
-│   ├── TStarFramewor.py  # Demonstration class for integrating T* searching with QA
-├── HaystackBench              # Script for inference on LV-Haystack dataset
-│   ├── val_LV_Haystack.py  
-├── README.md                  # Project readme
+LV-Haystack/
+├── LLaVA-NeXT/                # Query grounding and QA interface (e.g., LLaVA or GPT-4 API)
+├── YOLO-World/                # Object detection model with open vocabulary
+├── TStar/                     # Core Python module for T* keyframe search 
+│   ├── interface_llm.py       # Interface for grounding questions with VLMs
+│   ├── interface_yolo.py      # Function for scoring images using YOLO
+│   ├── interface_searcher.py  # Logic for searching keyframes in T*
+│   ├── TStarFramework.py      # Example class integrating T* searching with QA
+├── HaystackBench              # Scripts for inference on the LV-Haystack dataset
+│   ├── run_TStar_onDataset.py # Run keyframe search on a given dataset (e.g., LongVideoBench)
+│   ├── val_kfs_results.py     # Evaluate keyframe search results on LV-Haystack
+│   ├── val_qa_results.py      # Evaluate video question answering with searched keyframes
+├── README.md                  # Documentation for the repository
+
 
 ```
 
-## Run VideoSearching Demo
+## Run TStar Demo
 
-The example below demonstrates how to perform video question answering with keyframe searching framework. This example uses LLaVA-OneVision as the VLM and YOLO-World for keyframe searching.
+The example below demonstrates how to perform video question answering with keyframe searching framework. This example uses GPT-4o as the VLM and YOLO-World as scoring function.
 
 ```python
 export OPENAI_API_KEY=your_openai_api_key
 
-python TStar/TStarFramework.py \
+python run_TStar_Demo_onVideo.py \
     --video_path /path/to/LV-Haystack/38737402-19bd-4689-9e74-3af391b15feb.mp4 \
     --question "What is the color of the couch?" \
     --options "A) Red, B) Blue, C) Green, D) Yellow" \
-    --llava_model_path lmms-lab/llava-onevision-qwen2-7b-ov \
     --yolo_config_path ./YOLOWorld/configs/yolo_config.py \
     --yolo_checkpoint_path ./pretrained/yolo_checkpoint.pth \
     --search_nframes 8 \
@@ -57,28 +61,19 @@ python TStar/TStarFramework.py \
 ```
 
 
-## Test VL-HayStack
+## Test LV-HayStack
 To evaluate T* on a dataset (e.g., LV-Haystack), use the following command:
 
-```python
-python TStar/val_LV_Haystack.py \
-    --input_json ./Datasets/Haystack-Bench/annotations.json \
-    --output_json ./Resoults/Haystack_Bench_Seaching.json \
-    --video_dir ./Data/Haystack-Bench/videos \
-    --llava_model_path lmms-lab/llava-onevision-qwen2-7b-ov \
-    --yolo_config_path ./YOLOWorld/configs/pretrain/yolo_world_v2_xl_vlpan_bn.py \
-    --yolo_checkpoint_path ./pretrained/yolo_checkpoint.pth \
-    --search_nframes 8 \
-    --image_grid_shape 8 8 \
-    --confidence_threshold 0.5 \
-    --output_dir ./outputs \
-    --device cuda:0
+```bash
+# 
+bash ./eval_LV_Haystack.sh
+
 ```
+</details>
 
-## Searching KeyFrame for Your Dataset
+### Searching KeyFrame for Your Dataset
 
-### Preparing Your Dataset
-To process your own dataset with VL-Haystack, you need to prepare a JSON file describing the dataset. The JSON file should follow the format below:
+To process your own dataset with T*, you need to prepare a JSON file describing the dataset. The JSON file should follow the format below:
 <details>
   <summary>Click to expand JSON examples!</summary>
   
@@ -110,14 +105,24 @@ To process your own dataset with VL-Haystack, you need to prepare a JSON file de
 </details>
 
 
-### Running the Framework on Your Dataset
-
+<details>
+  <summary>Click to expand python script!</summary>
+  
 ```python
-python TStar/val_LV_Haystack.py \
+# 
+python HaystackBench/run_TStar_onDataset.py \
+    --input_json path_to_your_annotations.json \
+    --output_json path_to_your_annotations_Tstar_frames.json \
+    --video_dir ./Data/Haystack-Bench/videos \
+    --yolo_config_path ./YOLOWorld/configs/pretrain/yolo_world_v2_xl_vlpan_bn.py \
+    --yolo_checkpoint_path ./pretrained/yolo_checkpoint.pth \
+    --search_nframes 8 \
+    --image_grid_shape 8 8 \
+    --confidence_threshold 0.5 \
+    --device cuda:0
+
+# new you have add predict frame index in your annotations json
+# and sampine frame with the T* prediction for your works!
+
 ```
- 
-
-# Jinhui
-
-export https_proxy="http://10.120.16.212:20000"; export http_proxy="http://10.120.16.212:20000"; export all_proxy="socks5://10.120.16.212:20000"
-
+</details>
