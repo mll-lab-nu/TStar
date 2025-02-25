@@ -38,6 +38,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--search_budget', type=float, default=0.5, help='Maximum ratio of frames to process during search.')
     parser.add_argument('--output_dir', type=str, default='./output', help='Directory to save outputs.')
     parser.add_argument('--prefix', type=str, default='stitched_image', help='Prefix for output filenames.')
+
     return parser.parse_args()
 
 def main():
@@ -60,7 +61,7 @@ def main():
         device=args.device
     )
 
-    # Initialize VideoSearcher
+    # Initialize VideoSearcher by set grounder and yolo_scorer
     searcher = TStarFramework(
         grounder=grounder,
         yolo_scorer=yolo_interface,
@@ -78,15 +79,13 @@ def main():
     )
 
     # Run the search and QA process
-    searcher.run()
+    searcher.run() 
 
     # Output the results
     print("Final Results:")
     print(f"Grounding Objects: {searcher.results['Searching_Objects']}")
     print(f"Frame Timestamps: {searcher.results['timestamps']}")
     print(f"Answer: {searcher.results['answer']}")
-
-
 
 
 if __name__ == "__main__":
@@ -96,6 +95,6 @@ if __name__ == "__main__":
     This script allows searching for specific objects within a video using YOLO object detection and GPT-4 for question-answering. It leverages the TStar framework's universal Grounder, YOLO interface, and video searcher to identify relevant frames and answer questions based on the detected objects.
 
     Usage:
-        python tstar_searcher.py --video_path path/to/video.mp4 --question "Your question here" --options "A) Option1\nB) Option2\nC) Option3\nD) Option4"
+        python run_TStarDemo_onVideo.py --video_path path/to/video.mp4 --question "Your question here" --options "A) Option1\nB) Option2\nC) Option3\nD) Option4"
     """
     main()
