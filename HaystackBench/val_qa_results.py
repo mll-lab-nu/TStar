@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import argparse
 import numpy as np
-from TStar.interface_llm import TStarUniversalGrounder
+from TStar.interface_grounding import TStarUniversalGrounder
 
 # 配置日志
 logging.basicConfig(
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     # 初始化 TStarUniversalGrounder
     tstar_grounder = TStarUniversalGrounder(
         backend="gpt4",
-        gpt4_model_name="gpt-4o",
+        model_name="gpt-4o",
         num_frames=8
     )
 

@@ -18,10 +18,10 @@ from decord import VideoReader, cpu
 from scipy.interpolate import UnivariateSpline
 
 # Import custom TStar interfaces
-from TStar.interface_llm import TStarUniversalGrounder
+from TStar.interface_grounding import TStarUniversalGrounder
 from TStar.interface_yolo import YoloInterface
 from TStar.interface_searcher import TStarSearcher
-from TStar.TStarFramework import TStarFramework, initialize_yolo  # better to keep interfaces separate for readability
+from TStar.TStarFramework import TStarFramework, initialize_heuristic  # better to keep interfaces separate for readability
 
 
 
@@ -120,7 +120,7 @@ def process_TStar_onVideo(args, data_item,
     # Initialize VideoSearcher
     TStar_framework = TStarFramework(
         grounder=grounder,
-        yolo_scorer=yolo_scorer,
+        heuristic=yolo_scorer,
         video_path=data_item['video_path'],
         question=data_item['question'],
         options=data_item['options'],
@@ -200,11 +200,11 @@ def main():
        # Initialize Grounder
     grounder = TStarUniversalGrounder(
         backend="gpt4",
-        gpt4_model_name="gpt-4o"
+        model_name="gpt-4o"
     )
 
     # Initialize YOLO interface
-    yolo_interface = initialize_yolo(
+    yolo_interface = initialize_heuristic(
         config_path=args.config_path,
         checkpoint_path=args.checkpoint_path,
         device=args.device

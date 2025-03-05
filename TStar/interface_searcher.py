@@ -16,7 +16,7 @@ import logging
 # Assuming YoloWorldInterface is defined elsewhere and imported correctly
 # from your_project.yolo_interface import YoloWorldInterface
 # 导入自定义的 TStar 接口
-from TStar.interface_yolo import YoloWorldInterface, YoloV5Interface, YoloInterface
+from TStar.interface_heuristic import YoloWorldInterface, YoloInterface
 
 
 
@@ -49,6 +49,7 @@ class TStarSearcher:
     def __init__(
         self,
         video_path: str,
+        heuristic: YoloInterface,
         target_objects: List[str],
         cue_objects: List[str],
         search_nframes: int = 8,
@@ -58,7 +59,7 @@ class TStarSearcher:
         prefix: str = None,
         confidence_threshold: float = 0.5,
         object2weight: Optional[dict] = None,
-        yolo_scorer: Optional[YoloInterface] = None,
+        
 
     ):
         """
@@ -112,7 +113,7 @@ class TStarSearcher:
         self.Score_history = []
         self.non_visiting_history  = []
         # Initialize YOLO interface
-        self.yolo = yolo_scorer
+        self.yolo = heuristic
         self.reset_yolo_vocabulary(target_objects=target_objects, cue_objects=cue_objects)
         for object in target_objects:
             self.object2weight[object] = 1.0

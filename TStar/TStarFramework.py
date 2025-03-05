@@ -23,8 +23,8 @@ from decord import VideoReader, cpu
 from scipy.interpolate import UnivariateSpline
 from PIL import Image
 # Import custom TStar interfaces
-from TStar.interface_llm import TStarUniversalGrounder
-from TStar.interface_yolo import YoloWorldInterface, YoloInterface
+from TStar.interface_grounding import TStarUniversalGrounder
+from TStar.interface_heuristic import YoloWorldInterface, OWLInterface, TStarUniversalHeuristic
 from TStar.interface_searcher import TStarSearcher
 from TStar.utilites import save_as_gif
 from matplotlib.lines import Line2D
@@ -47,7 +47,7 @@ class TStarFramework:
     def __init__(
         self,
         video_path: str,
-        yolo_scorer: YoloInterface,
+        heuristic: TStarUniversalHeuristic,
         grounder: TStarUniversalGrounder,
         question: str,
         options: str,
@@ -83,7 +83,7 @@ class TStarFramework:
             device (str, optional): Device for model inference (e.g., "cuda:0" or "cpu"). Default is "cuda:0".
         """
         self.video_path = video_path
-        self.yolo_scorer = yolo_scorer
+        self.yolo_scorer = heuristic
         self.grounder = grounder
         self.question = question
         self.options = options
@@ -185,7 +185,7 @@ class TStarFramework:
             output_dir=self.output_dir,
             confidence_threshold=self.confidence_threshold,
             search_budget=self.search_budget,
-            yolo_scorer=self.yolo_scorer
+            heuristic=self.yolo_scorer
         )
 
         return video_searcher
@@ -522,11 +522,10 @@ class TStarFramework:
 
         pass
 import seaborn as sns
-def initialize_yolo(
-    config_path: str,
-    checkpoint_path: str,
+def initialize_heuristic(
+    heuristic: str,
     device: str
-) -> YoloInterface:
+) -> TStarUniversalHeuristic:
     """
     Initialize the YOLO object detection model.
 
@@ -542,12 +541,26 @@ def initialize_yolo(
         FileNotFoundError: If the configuration file or checkpoint file is not found.
     """
 
+
+    # model_choice = 'owl_model'
+    # if model_choice == 'owl_model':
+    #     model_name="google/owlvit-base-patch32"
+    #     owl_interface = OWLInterface(
+    #         config_path = model_name,
+    #         checkpoint_path=None,
+    #         device="cuda:0"
+    #     )
+    # logger.info("YoloWorldInterface initialized successfully.")
+    config_path = "./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py"
+    checkpoint_path = "./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth"
+    
+
+    
     yolo = YoloWorldInterface(
         config_path=config_path,
         checkpoint_path=checkpoint_path,
         device=device
     )
-    logger.info("YoloWorldInterface initialized successfully.")
     return yolo
 
 
@@ -584,12 +597,12 @@ def main():
     # Initialize Grounder
     grounder = TStarUniversalGrounder(
         backend="gpt4",
-        gpt4_model_name="gpt-4o"
+        model_name="gpt-4o"
     )
     logger.info("TStarUniversalGrounder initialized successfully.")
 
     # Initialize YOLO interface
-    yolo_interface = initialize_yolo(
+    yolo_interface = initialize_heuristic(
         config_path=args.config_path,
         checkpoint_path=args.checkpoint_path,
         device=args.device
@@ -598,7 +611,7 @@ def main():
     # Initialize VideoSearcher
     searcher = TStarFramework(
         grounder=grounder,
-        yolo_scorer=yolo_interface,
+        heuristic=yolo_interface,
         video_path=args.video_path,
         question=args.question,
         options=args.options,
@@ -623,7 +636,70 @@ def main():
 
 
     
+def run_tstar(
+    video_path: str,
+    question: str,
+    options: str,
+    grounder: str = "gpt-4o",
+    heuristic: str = "owl-vit",
+    device: str = "cuda:0",
+    search_nframes: int = 8,
+    grid_rows: int = 4,
+    grid_cols: int = 4,
+    confidence_threshold: float = 0.6,
+    search_budget: float = 0.5,
+    output_dir: str = './output',
+):
+    """
+    Executes the TStar video frame search and QA process.
+    
+    Args:
+        video_path (str): Path to the input video file.
+        question (str): Question for video content QA.
+        options (str): Multiple-choice options for the question.
+        config_path (str): Path to the YOLO configuration file.
+        checkpoint_path (str): Path to the YOLO model checkpoint.
+        device (str): Device for model inference (e.g., "cuda:0" or "cpu").
+        search_nframes (int): Number of top frames to return.
+        grid_rows (int): Number of rows in the image grid.
+        grid_cols (int): Number of columns in the image grid.
+        confidence_threshold (float): YOLO detection confidence threshold.
+        search_budget (float): Maximum ratio of frames to process during search.
+        output_dir (str): Directory to save outputs.
+    
+    Returns:
+        dict: Results containing detected objects, timestamps, and the QA answer.
+    """
+    # Initialize Grounder and YOLO
+    grounder = TStarUniversalGrounder(backend="gpt4", model_name=grounder)
+    
+    TStar_Heuristic = initialize_heuristic(
+        heuristic=heuristic,
+        device=device
+    )
 
+    # Initialize and run the search framework
+    searcher = TStarFramework(
+        grounder=grounder,
+        heuristic=TStar_Heuristic,
+        video_path=video_path,
+        question=question,
+        options=options,
+        search_nframes=search_nframes,
+        grid_rows=grid_rows,
+        grid_cols=grid_cols,
+        output_dir=output_dir,
+        confidence_threshold=confidence_threshold,
+        search_budget=search_budget,
+        device=device
+    )
+    searcher.run()
+
+    return {
+        "Grounding Objects": searcher.results.get('Searching_Objects', []),
+        "Frame Timestamps": searcher.results.get('timestamps', []),
+        "Answer": searcher.results.get('answer', "No answer generated")
+    }
 
 if __name__ == "__main__":
-    main()
+    run_tstar()
