@@ -1,8 +1,6 @@
-import os
 import argparse
 import warnings
-from TStar.interface_grounding import TStarUniversalGrounder
-from TStar.TStarFramework import TStarFramework, run_tstar
+from TStar.TStarFramework import run_tstar
 
 
 

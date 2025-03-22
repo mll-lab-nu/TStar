@@ -1,41 +1,18 @@
 import os
 import json
-import os
 import argparse
-import json
 from typing import List
+from datasets import load_dataset
 
 # Import custom TStar interfaces
 from TStar.interface_grounding import TStarUniversalGrounder
 from TStar.interface_heuristic import HeuristicInterface
 from TStar.TStarFramework import TStarFramework, initialize_heuristic  # better to keep interfaces separate for readability
 
-import os
-from datasets import load_dataset
-from typing import List
 
-
-def loadJson(json_file):
-    # 读取原始 column-oriented JSON
-    with open(json_file, "r") as f:
-        data = json.load(f)
-
-    # 获取所有的字段名（列名）
-    keys = list(data.keys())
-
-    # 获取每列的长度（假设每列长度一致）
-    num_items = len(data[keys[0]])
-
-    # 合并为 list of dicts
-    merged_list = []
-    for i in range(num_items):
-        item = {key: data[key][i] for key in keys}
-        merged_list.append(item)
-
-    return merged_list
 
 def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack", 
-                          split="test",
+                          split="tiny",
                           video_root: str = "Datasets/Ego4D_videos") -> List[dict]:
     """Load and transform the dataset into the required format for T*.
 
@@ -51,16 +28,15 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
     ]
     """
     # # Load the dataset from the given source
-    # dataset = load_dataset(dataset_meta, download_mode="force_redownload")
+    dataset = load_dataset(dataset_meta, download_mode="force_redownload")
     
-    # # Extract the 'test' split from the dataset
-    # LVHaystact_testset = dataset[split]
+    # Extract the 'test' split from the dataset
+    LVHaystact_testset = dataset[split]
 
     # # List to hold the transformed data
     TStar_format_data = []
 
     
-    LVHaystact_testset = loadJson("./HaystackBench/LVHaystack_test.json")
     # Iterate over each row in the dataset
     for idx, entry in enumerate(LVHaystact_testset):
         try:
@@ -177,8 +153,10 @@ def main():
 
     # Data meta processing arguments
     parser.add_argument('--dataset_meta', type=str, default="LVHaystack/LongVideoHaystack", help='Path to the input JSON file for batch processing.')
+    parser.add_argument('--split', type=str, default="tiny", help='Path to the input JSON file for batch processing.')
+    
     parser.add_argument('--video_root', type=str, default='./Datasets/ego4d_data/ego4d_data/v1/256p', help='Root directory where the input video files are stored.')
-    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack_test.json', help='Path to save the batch processing results.')
+    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack_dev.json', help='Path to save the batch processing results.')
     
     # search tools
     parser.add_argument('--grounder', type=str, default='gpt-4o', help='Directory to save outputs.')
@@ -200,7 +178,7 @@ def main():
 
 
     if args.dataset_meta:
-        dataset = LVHaystack2TStarFormat(dataset_meta=args.dataset_meta, video_root=args.video_root)
+        dataset = LVHaystack2TStarFormat(dataset_meta=args.dataset_meta, split=arg.split, video_root=args.video_root)
     
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)

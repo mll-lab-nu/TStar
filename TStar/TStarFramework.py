@@ -523,17 +523,15 @@ def initialize_heuristic(
 ) -> HeuristicInterface:
     """
     Initialize the YOLO object detection model.
-
     Args:
         device (str): Device for model inference (e.g., "cuda:0").
-
     Returns:
         YoloWorldInterface: Initialized YOLO interface instance.
-
     Raises:
         FileNotFoundError: If the configuration file or checkpoint file is not found.
     """
     if heuristic_tpye == 'owl-vit':
+        # I think hard code here will be good for local-relative only parameter 
         model_name="google/owlvit-base-patch32"
         owl_interface = OWLInterface(
             model_name_or_path = model_name,
@@ -554,7 +552,6 @@ def initialize_heuristic(
     else:
         raise NotImplementedError(f"Heuristic type '{heuristic_tpye}' is not implemented.")
 
-        
     return heuristic_model
 
 def run_tstar(
