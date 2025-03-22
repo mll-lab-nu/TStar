@@ -1,28 +1,38 @@
-import pandas as pd
 import os
 import json
 import os
 import argparse
 import json
-import numpy as np
-import matplotlib.pyplot as plt
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
-from decord import VideoReader, cpu
-from scipy.interpolate import UnivariateSpline
+from typing import List
 
 # Import custom TStar interfaces
 from TStar.interface_grounding import TStarUniversalGrounder
-from TStar.interface_heuristic import YoloInterface
-from TStar.interface_searcher import TStarSearcher
+from TStar.interface_heuristic import HeuristicInterface
 from TStar.TStarFramework import TStarFramework, initialize_heuristic  # better to keep interfaces separate for readability
 
-
-
 import os
-import ast
 from datasets import load_dataset
 from typing import List
+
+
+def loadJson(json_file):
+    # 读取原始 column-oriented JSON
+    with open(json_file, "r") as f:
+        data = json.load(f)
+
+    # 获取所有的字段名（列名）
+    keys = list(data.keys())
+
+    # 获取每列的长度（假设每列长度一致）
+    num_items = len(data[keys[0]])
+
+    # 合并为 list of dicts
+    merged_list = []
+    for i in range(num_items):
+        item = {key: data[key][i] for key in keys}
+        merged_list.append(item)
+
+    return merged_list
 
 def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack", 
                           split="test",
@@ -40,22 +50,24 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
         // More entries...
     ]
     """
-    # Load the dataset from the given source
-    dataset = load_dataset(dataset_meta, download_mode="force_redownload")
+    # # Load the dataset from the given source
+    # dataset = load_dataset(dataset_meta, download_mode="force_redownload")
     
-    # Extract the 'test' split from the dataset
-    LVHaystact_testset = dataset[split]
+    # # Extract the 'test' split from the dataset
+    # LVHaystact_testset = dataset[split]
 
-    # List to hold the transformed data
+    # # List to hold the transformed data
     TStar_format_data = []
 
+    
+    LVHaystact_testset = loadJson("./HaystackBench/LVHaystack_test.json")
     # Iterate over each row in the dataset
-    for idx, entry in enumerate(LVHaystact_testset[:2]):
+    for idx, entry in enumerate(LVHaystact_testset):
         try:
             # Extract necessary fields from the entry
             video_id = entry.get("video_id")
             question = entry.get("question")
-            gt_answer = entry.get("answer", "")
+            gt_answer = entry.get("answer")
 
             options_dict = entry.get("options", "")
             gt_frame_index = entry.get("frame_indexes", []) #gt frame index for quetion
@@ -90,13 +102,14 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
         except Exception as e:
             print(f"Error processing entry {idx+1}: {str(e)}")
 
-    return TStar_format_data
+    return TStar_format_data # for debug[:2]
 
 
 
-def process_TStar_onVideo(args, data_item,
-        yolo_scorer: YoloInterface,
-        grounder: TStarUniversalGrounder,) -> dict:
+def get_TStar_search_results(args, data_item,
+        grounder: TStarUniversalGrounder,
+        heurisiticFuncion: HeuristicInterface,
+        ) -> dict:
     """
     Process a single video search and QA.
 
@@ -112,45 +125,44 @@ def process_TStar_onVideo(args, data_item,
  
 
     # Initialize VideoSearcher
-    TStar_framework = TStarFramework(
-        grounder=grounder,
-        heuristic=yolo_scorer,
+    TStar_searcher = TStarFramework(
         video_path=data_item['video_path'],
         question=data_item['question'],
         options=data_item['options'],
+        grounder=grounder,
+        heuristic=heurisiticFuncion,
         search_nframes=args.search_nframes,
         grid_rows=args.grid_rows,
         grid_cols=args.grid_cols,
         output_dir=args.output_dir,
         confidence_threshold=args.confidence_threshold,
         search_budget=args.search_budget,
-        prefix=args.prefix,
         device=args.device
     )
 
     # Use Grounder to get target and cue objects
-    target_objects, cue_objects = TStar_framework.get_grounded_objects()
-
+    target_objects, cue_objects = TStar_searcher.get_grounded_objects()
     # Initialize Searching Targets to TStar Seacher
-    video_searcher = TStar_framework.set_searching_targets(target_objects, cue_objects)
-
-
+    video_searcher = TStar_searcher.set_searching_targets(target_objects, cue_objects)
     # Perform search
-    all_frames, time_stamps = TStar_framework.perform_search(video_searcher)
-
+    all_frames, time_stamps = TStar_searcher.perform_search(video_searcher)
 
 
     # Output the results
+    print("#"*20)
+    print(f"Input Quetion: {data_item['question']}")
+    print(f"Input Options: {data_item['options']}")
+    print("#"*20)
     print("Final Results:")
-    print(f"Grounding Objects: {TStar_framework.results['Searching_Objects']}")
-    print(f"Frame Timestamps: {TStar_framework.results['timestamps']}")
+    print(f"Grounding Objects: {TStar_searcher.results['Searching_Objects']}")
+    print(f"Frame Timestamps: {TStar_searcher.results['timestamps']}")
 
     # Collect the results
     result = {
         "video_path": data_item['video_path'],
-        "grounding_objects": TStar_framework.results.get('Searching_Objects', []),
-        "keyframe_timestamps": TStar_framework.results.get('timestamps', []),
-        "frame_distribution": video_searcher.P_history[-1]
+        "grounding_objects": TStar_searcher.results.get('Searching_Objects', []),
+        "keyframe_timestamps": TStar_searcher.results.get('timestamps', []),
+        "score_distribution": video_searcher.Score_history[-1]
     }
 
     return result
@@ -166,12 +178,16 @@ def main():
     # Data meta processing arguments
     parser.add_argument('--dataset_meta', type=str, default="LVHaystack/LongVideoHaystack", help='Path to the input JSON file for batch processing.')
     parser.add_argument('--video_root', type=str, default='./Datasets/ego4d_data/ego4d_data/v1/256p', help='Root directory where the input video files are stored.')
-    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack.json', help='Path to save the batch processing results.')
+    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack_test.json', help='Path to save the batch processing results.')
     
-    # Common arguments
-    
+    # search tools
+    parser.add_argument('--grounder', type=str, default='gpt-4o', help='Directory to save outputs.')
+    parser.add_argument('--heuristic', type=str, default='owl-vit', help='Directory to save outputs.')
+    ## for yolo
     parser.add_argument('--config_path', type=str, default="./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth", help='Path to the YOLO model checkpoint.')
+    
+    # Common arguments
     parser.add_argument('--device', type=str, default="auto", help='Device for model inference (e.g., "cuda" or "cpu").')
     parser.add_argument('--search_nframes', type=int, default=8, help='Number of top frames to return.')
     parser.add_argument('--grid_rows', type=int, default=4, help='Number of rows in the image grid.')
@@ -179,44 +195,32 @@ def main():
     parser.add_argument('--confidence_threshold', type=float, default=0.7, help='YOLO detection confidence threshold.')
     parser.add_argument('--search_budget', type=float, default=1.0, help='Maximum ratio of frames to process during search.')
     parser.add_argument('--output_dir', type=str, default='./output', help='Directory to save outputs.')
-    parser.add_argument('--prefix', type=str, default='stitched_image', help='Prefix for output filenames.')
-    
-    args=  parser.parse_args()
+
+    args = parser.parse_args()
 
 
     if args.dataset_meta:
-        # Batch processing
         dataset = LVHaystack2TStarFormat(dataset_meta=args.dataset_meta, video_root=args.video_root)
-        
-
+    
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
-       # Initialize Grounder
-    grounder = TStarUniversalGrounder(
-        backend="gpt4",
-        model_name="gpt-4o"
-    )
-
-    # Initialize YOLO interface
-    yolo_interface = initialize_heuristic(
-        config_path=args.config_path,
-        checkpoint_path=args.checkpoint_path,
+    # Initialize Search tools
+    grounder = TStarUniversalGrounder(model_name=args.grounder)
+    TStarHeuristic = initialize_heuristic(
+        heuristic_tpye=args.heuristic
     )
 
     results = []
 
-
     for idx, data_item in enumerate(dataset):      
-
-
         print(f"Processing {idx+1}/{len(dataset)}: {data_item['video_id']}")
         try:
-            result = process_TStar_onVideo(args, data_item=data_item, grounder=grounder, yolo_scorer=yolo_interface)
-            
+            result = get_TStar_search_results(args, data_item=data_item, grounder=grounder, heurisiticFuncion=TStarHeuristic)
             print(f"Completed: {data_item['video_id']}\n")
         except Exception as e:
             print(f"Error processing {data_item['video_id']}: {e}")
+            continue
             result = {
                 "video_id": data_item.get('video_id', ''),
                 "grounding_objects": [],
@@ -234,45 +238,39 @@ def main():
     
     print(f"Batch processing completed. Results saved to {output_json}")
 
-
-
 if __name__ == "__main__":
-    """
-    TStarSearcher: Comprehensive Video Frame Search Tool
 
-    This script input videos and questions (with / without options) and frame buget K
-    
-    then return the the K keyframe indexs to response the given question. 
+    """
+    TStarSearcher: Comprehensive Video Frame Search and Question Answering Tool
+
+    This script processes videos and associated questions (with or without multiple-choice options),
+    and returns the top-K keyframe indices that best respond to the question using visual grounding
+    and heuristic-based search.
+
+    Core Features:
+    - Utilizes the TStarFramework to conduct multi-stage visual reasoning over long videos.
+    - Supports flexible grounding models (e.g., GPT-4, LLaVA) and visual heuristics (e.g., OWL-ViT, YOLO).
+    - Enables batch processing of datasets and saves results in a structured JSON format.
 
     Usage:
-        Batch Processing:
-            python tstar_searcher.py --dataset_meta path/to/dateset meta --output_json path/to/out_json with the attaching rearching frames.
+    1. Data Preprocessing:
+    Use a custom converter (e.g., `LVHaystack2TStarFormat`) to transform datasets such as 
+    LVHaystack from HuggingFace into the required T* input format. 
+    This involves aligning keys such as `video_id`, `question`, `options`, etc.
 
-        input json
-        [
-            {
-                "video_path": "path/to/video1.mp4",
-                "question": "What is the color of my couch?",
-                "options": "A) Red\nB) Black\nC) Green\nD) White\n"
-            },
-            // 更多条目...
-        ]
-        output: 
-        [
-            {
-                "video_path": "path/to/video1.mp4",
-                "question": "What is the color of my couch?",
-                "options": "A) Red\nB) Black\nC) Green\nD) White\n"
+    2. Run the batch inference:
+    ```bash
+    python run_TStar_onDataset.py \
+        --dataset_meta path/to/dataset_meta \
+        --output_json path/to/output.json \
+        --video_root path/to/video_folder
 
-                "keyframe_distribution": []
-                "keyframe_timestamps: []
-            },
-            // 更多条目...
-        ]
-        
-        ]
+    The output JSON will include:
+        Original fields (e.g., video_id, question, options, answer, etc.)
+        Predicted keyframe timestamps (keyframe_timestamps)
+        Grounded objects (grounding_objects)
+        Frame-wise score distribution (frame_distribution)
     """
-    
     main()
 
     

@@ -267,7 +267,6 @@ class TStarUniversalGrounder:
     """
     def __init__(
         self,
-        backend: str = "llava",
         model_name: str = "gpt-4o",
         model_path: Optional[str] = None,
         model_base: Optional[str] = None,
@@ -279,14 +278,14 @@ class TStarUniversalGrounder:
         model_path, model_base: Llava 模型的路径及版本
         gpt4_model_name, gpt4_api_key: GPT4 的模型名称及 API Key
         """
-        self.backend = backend.lower()
+        self.backend = model_name.lower()
         self.num_frames = num_frames
-        if self.backend == "llava": #@Jinhui should put at factory!!!
+        if "llava" in self.backend: #@Jinhui should put at factory!!!
             # 初始化 LlavaInterface
             if not model_path:
                 raise ValueError("Please provide model_path for LlavaInterface")
             self.VLM_model_interfance = LlavaInterface(model_path=model_path, model_base=model_base)
-        elif self.backend == "gpt4":
+        elif "gpt" in self.backend:
             # 初始化 GPT4Interface
             self.VLM_model_interfance = GPT4Interface(model=model_name, api_key=gpt4_api_key)
         else:

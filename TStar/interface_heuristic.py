@@ -10,7 +10,7 @@ from mmdet.utils import get_test_pipeline_cfg
 from torch.amp import autocast
 import torch
 import supervision as sv
-from typing import Dict, Optional, Sequence, List
+from typing import List
 
 import supervision as sv
 from supervision.draw.color import Color, ColorPalette
