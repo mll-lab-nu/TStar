@@ -24,7 +24,7 @@ from scipy.interpolate import UnivariateSpline
 from PIL import Image
 # Import custom TStar interfaces
 from TStar.interface_grounding import TStarUniversalGrounder
-from TStar.interface_heuristic import YoloWorldInterface, OWLInterface, TStarUniversalHeuristic
+from TStar.interface_heuristic import YoloWorldInterface, OWLInterface, HeuristicInterface
 from TStar.interface_searcher import TStarSearcher
 from TStar.utilites import save_as_gif
 from matplotlib.lines import Line2D
@@ -47,7 +47,7 @@ class TStarFramework:
     def __init__(
         self,
         video_path: str,
-        heuristic: TStarUniversalHeuristic,
+        heuristic: HeuristicInterface,
         grounder: TStarUniversalGrounder,
         question: str,
         options: str,
@@ -523,15 +523,13 @@ class TStarFramework:
         pass
 import seaborn as sns
 def initialize_heuristic(
-    heuristic: str,
-    device: str
-) -> TStarUniversalHeuristic:
+    heuristic_tpye: str="owl-vit",
+    **kwargs
+) -> HeuristicInterface:
     """
     Initialize the YOLO object detection model.
 
     Args:
-        config_path (str): Path to the YOLO configuration file.
-        checkpoint_path (str): Path to the YOLO model checkpoint.
         device (str): Device for model inference (e.g., "cuda:0").
 
     Returns:
@@ -540,28 +538,29 @@ def initialize_heuristic(
     Raises:
         FileNotFoundError: If the configuration file or checkpoint file is not found.
     """
+    if heuristic_tpye == 'owl-vit':
+        model_name="google/owlvit-base-patch32"
+        owl_interface = OWLInterface(
+            model_name_or_path = model_name,
+        )
+        heuristic_model = owl_interface
+        logger.info("OWLInterface initialized successfully.")
+    elif heuristic_tpye == 'yolo_model':
+        config_path = "./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py"
+        checkpoint_path = "./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth"
 
-
-    # model_choice = 'owl_model'
-    # if model_choice == 'owl_model':
-    #     model_name="google/owlvit-base-patch32"
-    #     owl_interface = OWLInterface(
-    #         config_path = model_name,
-    #         checkpoint_path=None,
-    #         device="cuda:0"
-    #     )
-    # logger.info("YoloWorldInterface initialized successfully.")
-    config_path = "./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py"
-    checkpoint_path = "./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth"
+        yolo = YoloWorldInterface(
+            config_path=config_path,
+            checkpoint_path=checkpoint_path,
+        )
+        heuristic_model = yolo
+        logger.info("YoloWorldInterface initialized successfully.")
     
+    else:
+        raise NotImplementedError(f"Heuristic type '{heuristic_tpye}' is not implemented.")
 
-    
-    yolo = YoloWorldInterface(
-        config_path=config_path,
-        checkpoint_path=checkpoint_path,
-        device=device
-    )
-    return yolo
+        
+    return heuristic_model
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -642,7 +641,6 @@ def run_tstar(
     options: str,
     grounder: str = "gpt-4o",
     heuristic: str = "owl-vit",
-    device: str = "cuda:0",
     search_nframes: int = 8,
     grid_rows: int = 4,
     grid_cols: int = 4,
@@ -659,7 +657,6 @@ def run_tstar(
         options (str): Multiple-choice options for the question.
         config_path (str): Path to the YOLO configuration file.
         checkpoint_path (str): Path to the YOLO model checkpoint.
-        device (str): Device for model inference (e.g., "cuda:0" or "cpu").
         search_nframes (int): Number of top frames to return.
         grid_rows (int): Number of rows in the image grid.
         grid_cols (int): Number of columns in the image grid.
@@ -674,8 +671,7 @@ def run_tstar(
     grounder = TStarUniversalGrounder(backend="gpt4", model_name=grounder)
     
     TStar_Heuristic = initialize_heuristic(
-        heuristic=heuristic,
-        device=device
+        heuristic_tpye=heuristic
     )
 
     # Initialize and run the search framework
@@ -690,8 +686,7 @@ def run_tstar(
         grid_cols=grid_cols,
         output_dir=output_dir,
         confidence_threshold=confidence_threshold,
-        search_budget=search_budget,
-        device=device
+        search_budget=search_budget
     )
     searcher.run()
 

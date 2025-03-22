@@ -1,13 +1,7 @@
 import pandas as pd
 import os
-import string
 import json
 import os
-import sys
-import cv2
-import torch
-import copy
-import logging
 import argparse
 import json
 import numpy as np
@@ -19,7 +13,7 @@ from scipy.interpolate import UnivariateSpline
 
 # Import custom TStar interfaces
 from TStar.interface_grounding import TStarUniversalGrounder
-from TStar.interface_yolo import YoloInterface
+from TStar.interface_heuristic import YoloInterface
 from TStar.interface_searcher import TStarSearcher
 from TStar.TStarFramework import TStarFramework, initialize_heuristic  # better to keep interfaces separate for readability
 
@@ -30,7 +24,7 @@ import ast
 from datasets import load_dataset
 from typing import List
 
-def LVHaystack2TStar_json(dataset_meta: str = "LVHaystack/LongVideoHaystack", 
+def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack", 
                           split="test",
                           video_root: str = "Datasets/Ego4D_videos") -> List[dict]:
     """Load and transform the dataset into the required format for T*.
@@ -47,7 +41,7 @@ def LVHaystack2TStar_json(dataset_meta: str = "LVHaystack/LongVideoHaystack",
     ]
     """
     # Load the dataset from the given source
-    dataset = load_dataset(dataset_meta)
+    dataset = load_dataset(dataset_meta, download_mode="force_redownload")
     
     # Extract the 'test' split from the dataset
     LVHaystact_testset = dataset[split]
@@ -175,9 +169,10 @@ def main():
     parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack.json', help='Path to save the batch processing results.')
     
     # Common arguments
+    
     parser.add_argument('--config_path', type=str, default="./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth", help='Path to the YOLO model checkpoint.')
-    parser.add_argument('--device', type=str, default="cuda:0", help='Device for model inference (e.g., "cuda:0" or "cpu").')
+    parser.add_argument('--device', type=str, default="auto", help='Device for model inference (e.g., "cuda" or "cpu").')
     parser.add_argument('--search_nframes', type=int, default=8, help='Number of top frames to return.')
     parser.add_argument('--grid_rows', type=int, default=4, help='Number of rows in the image grid.')
     parser.add_argument('--grid_cols', type=int, default=4, help='Number of columns in the image grid.')
@@ -191,7 +186,7 @@ def main():
 
     if args.dataset_meta:
         # Batch processing
-        dataset = LVHaystack2TStar_json(dataset_meta=args.dataset_meta, video_root=args.video_root)
+        dataset = LVHaystack2TStarFormat(dataset_meta=args.dataset_meta, video_root=args.video_root)
         
 
     # Create output directory if it doesn't exist
@@ -207,7 +202,6 @@ def main():
     yolo_interface = initialize_heuristic(
         config_path=args.config_path,
         checkpoint_path=args.checkpoint_path,
-        device=args.device
     )
 
     results = []

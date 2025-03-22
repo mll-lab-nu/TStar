@@ -39,7 +39,6 @@ def main():
         options=args.options,
         grounder=args.grounder,
         heuristic=args.heuristic,
-        device=args.device,
         search_nframes=args.search_nframes,
         grid_rows=args.grid_rows,
         grid_cols=args.grid_cols,
@@ -49,7 +48,11 @@ def main():
     )
 
     # Display the results
-    print("Final Results:")
+    print("#"*20)
+    print(f"Input Quetion: {args.question}")
+    print(f"Input Options: {args.question}")
+    print("#"*20)
+    print("T* Results:")
     print(f"Grounding Objects: {results['Grounding Objects']}")
     print(f"Frame Timestamps: {results['Frame Timestamps']}")
     print(f"Answer: {results['Answer']}")

@@ -16,7 +16,7 @@ import logging
 # Assuming YoloWorldInterface is defined elsewhere and imported correctly
 # from your_project.yolo_interface import YoloWorldInterface
 # 导入自定义的 TStar 接口
-from TStar.interface_heuristic import YoloWorldInterface, YoloInterface
+from TStar.interface_heuristic import YoloWorldInterface, HeuristicInterface
 
 
 
@@ -49,7 +49,7 @@ class TStarSearcher:
     def __init__(
         self,
         video_path: str,
-        heuristic: YoloInterface,
+        heuristic: HeuristicInterface,
         target_objects: List[str],
         cue_objects: List[str],
         search_nframes: int = 8,
@@ -183,7 +183,6 @@ class TStarSearcher:
             # Run the YOLO inference
             detections = self.yolo.inference_detector(
                 images=[image],  # Single image as a batch
-                max_dets=50,
                 use_amp=False
             )
 
