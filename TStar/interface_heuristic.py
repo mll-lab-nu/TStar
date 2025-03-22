@@ -1,24 +1,13 @@
-
-import os
-import cv2
 import os.path as osp
 from mmengine.config import Config
 from mmengine.dataset import Compose
-from mmdet.apis import init_detector
-from mmdet.utils import get_test_pipeline_cfg
-# from mmengine.runner.amp import autocast
+from mmdet.apis import init_detector # only for yoloworld interface
 from torch.amp import autocast
 import torch
 import supervision as sv
 from typing import List
+from supervision.draw.color import ColorPalette
 
-import supervision as sv
-from supervision.draw.color import Color, ColorPalette
-
-import torch
-from typing import List
-import supervision as sv  # 确保已安装 Supervision 库
-import os.path as osp
 
 
 
@@ -290,6 +279,5 @@ class OWLInterface(HeuristicInterface):
         # Format the text prompts for the YOLO model
         self.texts = [[obj.strip()] for obj in combined_texts] + [[' ']]
 
-        # Reparameterize the YOLO model with the provided text prompts
-        # self.model.reparameterize(self.texts)
+
         
