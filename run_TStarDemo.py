@@ -50,7 +50,7 @@ def main():
     print(f"Input Quetion: {args.question}")
     print(f"Input Options: {args.options}")
     print("#"*20)
-    print("T* Results:")
+    print("T* Searching Results:")
     print(f"Grounding Objects: {results['Grounding Objects']}")
     print(f"Frame Timestamps: {results['Frame Timestamps']}")
     print(f"Answer: {results['Answer']}")

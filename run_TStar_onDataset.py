@@ -28,7 +28,7 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
     ]
     """
     # # Load the dataset from the given source
-    dataset = load_dataset(dataset_meta, download_mode="force_redownload")
+    dataset = load_dataset(dataset_meta) #, download_mode="force_redownload"
     
     # Extract the 'test' split from the dataset
     LVHaystact_testset = dataset[split]
@@ -38,15 +38,15 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
 
     
     # Iterate over each row in the dataset
-    for idx, entry in enumerate(LVHaystact_testset):
+    for idx, item in enumerate(LVHaystact_testset):
         try:
             # Extract necessary fields from the entry
-            video_id = entry.get("video_id")
-            question = entry.get("question")
-            gt_answer = entry.get("answer")
+            video_id = item.get("video_id")
+            question = item.get("question")
+            gt_answer = item.get("answer")
 
-            options_dict = entry.get("options", "")
-            gt_frame_index = entry.get("frame_indexes", []) #gt frame index for quetion
+            options_dict = item.get("options", "")
+            gt_frame_index = item.get("frame_indexes", []) #gt frame index for quetion
 
             # Validate required fields
             if not video_id or not question:
@@ -61,7 +61,7 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
                 options = options.rstrip('\n')  # Remove the trailing newline
 
             # Construct the transformed dictionary for the entry
-            transformed_entry = {
+            transformed_item = {
                 "video_id": video_id,
                 "video_path": os.path.join(video_root, f"{video_id}.mp4"),  # Build the full video path
                 "question": question,
@@ -71,14 +71,14 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
             }
 
             # Add the transformed entry to the result list
-            TStar_format_data.append(transformed_entry)
+            TStar_format_data.append(transformed_item)
 
         except ValueError as e:
             print(f"Skipping entry {idx+1}, reason: {str(e)}")
         except Exception as e:
-            print(f"Error processing entry {idx+1}: {str(e)}")
+            print(f"Error processing item {idx+1}: {str(e)}")
 
-    return TStar_format_data # for debug[:2]
+    return TStar_format_data[:2] # [:2] for debug
 
 
 
@@ -96,7 +96,7 @@ def get_TStar_search_results(args, data_item,
         grounder (TStarUniversalGrounder): Universal Grounder instance.
 
     Returns:
-        dict: Results containing 'video_path', 'grounding_objects', 'frame_timestamps', 'answer'.
+        dict: Results containing 'video_path', 'grounding objects', 'frame_timestamps', 'answer'.
     """
  
 
@@ -113,31 +113,29 @@ def get_TStar_search_results(args, data_item,
         output_dir=args.output_dir,
         confidence_threshold=args.confidence_threshold,
         search_budget=args.search_budget,
-        device=args.device
     )
 
     # Use Grounder to get target and cue objects
     target_objects, cue_objects = TStar_searcher.get_grounded_objects()
     # Initialize Searching Targets to TStar Seacher
-    video_searcher = TStar_searcher.set_searching_targets(target_objects, cue_objects)
+    video_searcher = TStar_searcher.initialize_videoSearcher(target_objects, cue_objects)
     # Perform search
     all_frames, time_stamps = TStar_searcher.perform_search(video_searcher)
-
+    time_stamps.sort()
 
     # Output the results
-    print("#"*20)
+    print("#"*20+" Original Inputs "  + "#"*20)
     print(f"Input Quetion: {data_item['question']}")
     print(f"Input Options: {data_item['options']}")
-    print("#"*20)
-    print("Final Results:")
-    print(f"Grounding Objects: {TStar_searcher.results['Searching_Objects']}")
-    print(f"Frame Timestamps: {TStar_searcher.results['timestamps']}")
+    print("#"*20+" T* Searching Results "  + "#"*20)
+    print(f"Grounding Objects: target_objects: {target_objects}, cue_objects: {cue_objects}")
+    print(f"Frame Timestamps: {time_stamps}")
 
     # Collect the results
     result = {
         "video_path": data_item['video_path'],
-        "grounding_objects": TStar_searcher.results.get('Searching_Objects', []),
-        "keyframe_timestamps": TStar_searcher.results.get('timestamps', []),
+        "grounding_objects": {"target_objects": target_objects, "cue_objects": cue_objects},
+        "keyframe_timestamps": time_stamps,
         "score_distribution": video_searcher.Score_history[-1]
     }
 
@@ -153,15 +151,15 @@ def main():
 
     # Data meta processing arguments
     parser.add_argument('--dataset_meta', type=str, default="LVHaystack/LongVideoHaystack", help='Path to the input JSON file for batch processing.')
-    parser.add_argument('--split', type=str, default="tiny", help='Path to the input JSON file for batch processing.')
+    parser.add_argument('--split', type=str, default="test", help='Path to the input JSON file for batch processing.')
     
     parser.add_argument('--video_root', type=str, default='./Datasets/ego4d_data/ego4d_data/v1/256p', help='Root directory where the input video files are stored.')
-    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack_dev.json', help='Path to save the batch processing results.')
+    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack_test_check.json', help='Path to save the batch processing results.')
     
     # search tools
     parser.add_argument('--grounder', type=str, default='gpt-4o', help='Directory to save outputs.')
     parser.add_argument('--heuristic', type=str, default='owl-vit', help='Directory to save outputs.')
-    ## for yolo
+    ## if yolo as detector
     parser.add_argument('--config_path', type=str, default="./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py", help='Path to the YOLO configuration file.')
     parser.add_argument('--checkpoint_path', type=str, default="./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth", help='Path to the YOLO model checkpoint.')
     
@@ -178,7 +176,7 @@ def main():
 
 
     if args.dataset_meta:
-        dataset = LVHaystack2TStarFormat(dataset_meta=args.dataset_meta, split=arg.split, video_root=args.video_root)
+        dataset = LVHaystack2TStarFormat(dataset_meta=args.dataset_meta, split=args.split, video_root=args.video_root)
     
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
@@ -186,7 +184,7 @@ def main():
     # Initialize Search tools
     grounder = TStarUniversalGrounder(model_name=args.grounder)
     TStarHeuristic = initialize_heuristic(
-        heuristic_tpye=args.heuristic
+        heuristic_type=args.heuristic
     )
 
     results = []

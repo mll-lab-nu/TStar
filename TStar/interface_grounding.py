@@ -2,7 +2,7 @@ import os
 from typing import Dict, Optional, List
 import openai
 from PIL import Image
-
+import re
 # It is assumed that TStar.utilites defines the following functions:
 # - encode_image_to_base64: converts a PIL.Image to a base64 string.
 # - load_video_frames: loads a specified number of frames from a video.
@@ -107,7 +107,7 @@ class GPT4Interface:
         except Exception as e:
             return f"Error: {str(e)}"
 
-    def inference_with_frames(
+    def _inference_with_frames(
         self,
         query: str,
         frames: List[Image.Image],
@@ -177,7 +177,7 @@ class GPT4Interface:
         except Exception as e:
             return f"Error: {str(e)}"
 
-    def inference_with_frames_all_in_one(
+    def inference_with_frames(
         self,
         query: str,
         frames: List[Image.Image],
@@ -269,7 +269,7 @@ class TStarUniversalGrounder:
             "\nHere is a question about the video:\n" +
             f"Question: {question}\n"
         )
-        if options:
+        if len(options) > 1:
             system_prompt += f"Options: {options}\n"
         system_prompt += (
             "\nWhen answering this question about the video:\n"
@@ -277,27 +277,39 @@ class TStarUniversalGrounder:
             "2. Identify cue objects that might be near the key objects and appear in the scenes (list cue objects, separated by commas).\n\n"
             "Provide your answer in two lines, listing the key objects and cue objects separated by commas."
         )
-        response = self.VLM_model_interface.inference_with_frames_all_in_one(
+        response = self.VLM_model_interface.inference_with_frames(
             query=system_prompt,
             frames=frames,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        lines = response.split("\n")
-        if len(lines) < 2:
-            raise ValueError(f"Unexpected response format from inference_query_grounding() --> {response}.")
+        lines = [line.strip() for line in response.split("\n") if line.strip()]
+        if len(lines) != 2:
+            raise ValueError(f"Unexpected response format --> {response}")
+
         target_objects = [self.check_objects_str(obj) for obj in lines[0].split(",") if obj.strip()]
         cue_objects = [self.check_objects_str(obj) for obj in lines[1].split(",") if obj.strip()]
         return target_objects, cue_objects
 
     def check_objects_str(self, obj: str) -> str:
         """
-        Process the object string by converting to lowercase and removing extra characters.
+        Process the object string to normalize object names by:
+        - Lowercasing
+        - Removing prefixes like "1. ", "2. ", "Key objects:"
+        - Removing punctuation
+        - Stripping extra whitespace
         """
-        obj = obj.lower().strip()
-        obj = obj.replace("1. ", "").replace("2. ", "").replace(".", "")
+        obj = obj.strip().lower()
+
+        # Remove known prefixes (with optional whitespace)
+        obj = re.sub(r"^(key objects|cue objects)?[:\-]?\s*", "", obj)
         obj = obj.replace("key objects: ", "").replace("cue objects: ", "").replace(": ", "")
-        return obj
+        obj = re.sub(r"^[0-9]+\.\s*", "", obj)  # e.g., "1. "
+        
+        # Remove punctuation like periods, colons etc.
+        obj = re.sub(r"[^\w\s-]", "", obj)  # Keep letters, numbers, space, hyphen
+
+        return obj.strip()
 
     def inference_qa(
         self,
@@ -317,7 +329,7 @@ class TStarUniversalGrounder:
             f"Options: {options}\n\n" +
             "Answer with the option's letter from the given choices directly."
         )
-        response = self.VLM_model_interface.inference_with_frames_all_in_one(
+        response = self.VLM_model_interface.inference_with_frames(
             query=system_prompt,
             frames=frames,
             temperature=temperature,
@@ -340,7 +352,7 @@ class TStarUniversalGrounder:
             "\n".join(["<image>"] * len(frames)) +
             f"\nQuestion: {question}\n"
         )
-        response = self.VLM_model_interface.inference_with_frames_all_in_one(
+        response = self.VLM_model_interface.inference_with_frames(
             query=system_prompt,
             frames=frames,
             temperature=temperature,

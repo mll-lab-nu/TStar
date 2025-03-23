@@ -29,3 +29,5 @@ qa_results.json
 YOLO-World
 pretrained
 38737402-19bd-4689-9e74-3af391b15feb.mp4
+eval_LV_Haystack.sh
+

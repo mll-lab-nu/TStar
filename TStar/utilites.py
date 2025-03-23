@@ -2,15 +2,10 @@ import math
 import base64
 import io
 import os
-from typing import List, Dict
+from typing import List
 import numpy as np
 from PIL import Image
-
-try:
-    import cv2
-except ImportError:
-    cv2 = None
-    print("Warning: OpenCV is not installed, video frame extraction will not work.")
+import cv2
 
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection

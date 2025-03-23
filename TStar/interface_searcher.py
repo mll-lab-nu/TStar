@@ -77,6 +77,10 @@ class TStarSearcher:
         self.P_history = []
         self.Score_history = []
         self.non_visiting_history = []
+        self.image_grid_iters = []      # List of image grid iterations
+        self.detect_annotot_iters = []  # List of annotated image iterations
+        self.detect_bbox_iters = []     # List of bbox detections per iteration
+
 
         # Set YOLO interface (heuristic)
         self.heuristic = heuristic
@@ -445,7 +449,7 @@ class TStarSearcher:
                 images=[grid_image],
                 image_grids=self.image_grid_shape
             )
-            # Append grid and detection visualization for history
+            # # Append grid and detection visualization for history
             self.image_grid_iters.append([grid_image])
             self.detect_annotot_iters.append(self.heuristic.bbox_visualization(
                 images=[grid_image],
@@ -485,9 +489,6 @@ class TStarSearcher:
         Returns:
             Tuple containing keyframe images and their timestamps.
         """
-        self.image_grid_iters = []      # List of image grid iterations
-        self.detect_annotot_iters = []  # List of annotated image iterations
-        self.detect_bbox_iters = []     # List of bbox detections per iteration
 
         K = self.search_nframes
         video_length = int(self.total_frame_num)

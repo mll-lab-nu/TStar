@@ -50,6 +50,8 @@ class TStarFramework:
         self.search_budget = search_budget
         self._create_output_dir()
 
+        self.results = {} # to store search results, e.g., grounding, frames
+
     def _create_output_dir(self):
         """
         Ensure that the output directory exists.
@@ -61,18 +63,18 @@ class TStarFramework:
         Run the TStar framework to search for objects and answer questions.
         """
         target_objects, cue_objects = self.get_grounded_objects()
-        video_searcher = self._initialize_searcher(target_objects, cue_objects)
-        all_frames, time_stamps = self._perform_search(video_searcher)
+        video_searcher = self.initialize_videoSearcher(target_objects, cue_objects)
+        all_frames, time_stamps = self.perform_search(video_searcher, visualization=True)
 
         self._save_frames(all_frames, time_stamps)
         self._save_searching_iterations(video_searcher)
         self._plot_and_save_scores(video_searcher)
 
-        answer = self._perform_qa(all_frames)
+        answer = self.perform_qa(all_frames)
         logger.info(f"Answer: {answer}")
         
         return {
-            "Grounding Objects": {"target_objects": target_objects, "cue_objects": cue_objects},
+            "Grounding Objects": {'target_objects': target_objects, 'cue_objects': cue_objects},
             "Frame Timestamps": time_stamps,
             "Answer": answer
         }
@@ -83,17 +85,21 @@ class TStarFramework:
         """
         target_objects, cue_objects = self.grounder.inference_query_grounding(
             video_path=self.video_path,
-            question=self.question
+            question=self.question,
+            options=self.options
         )
+        self.results["Grounding Objects"] = {"target_objects": target_objects, "cue_objects":cue_objects}
         logger.info(f"Target objects: {target_objects}")
         logger.info(f"Cue objects: {cue_objects}")
         return target_objects, cue_objects
 
-    def _initialize_searcher(self, target_objects: List[str], cue_objects: List[str]) -> TStarSearcher:
+
+
+    def initialize_videoSearcher(self, target_objects: List[str], cue_objects: List[str]) -> TStarSearcher:
         """
         Initialize and configure the TStarSearcher with the given objects.
         """
-        return TStarSearcher(
+        videoSearcher =  TStarSearcher(
             video_path=self.video_path,
             target_objects=target_objects,
             cue_objects=cue_objects,
@@ -105,15 +111,21 @@ class TStarFramework:
             heuristic=self.heuristic
         )
 
-    def _perform_search(self, video_searcher: TStarSearcher) -> Tuple[List[np.ndarray], List[float]]:
+        return videoSearcher
+
+    def perform_search(self, video_searcher: TStarSearcher, visualization: bool = False) -> Tuple[List[np.ndarray], List[float]]:
         """
         Perform the search for relevant frames and their timestamps.
         """
-        all_frames, time_stamps = video_searcher.search_with_visualization()
+        if visualization:
+            all_frames, time_stamps = video_searcher.search_with_visualization()
+        else:
+            all_frames, time_stamps = video_searcher.search()
+        
         logger.info(f"Found {len(all_frames)} frames, timestamps: {time_stamps}")
         return all_frames, time_stamps
 
-    def _perform_qa(self, frames: List[np.ndarray]) -> str:
+    def perform_qa(self, frames: List[np.ndarray]) -> str:
         """
         Perform question answering on the retrieved frames.
         """
@@ -196,7 +208,7 @@ def run_tstar(
     grounder = TStarUniversalGrounder(model_name=grounder)
     heuristic = initialize_heuristic(heuristic)
 
-    video_searcher = TStarFramework(
+    TStarQA = TStarFramework(
         video_path=video_path,
         grounder=grounder,
         heuristic=heuristic,
@@ -210,7 +222,7 @@ def run_tstar(
         search_budget=search_budget
     )
 
-    return video_searcher.run()
+    return TStarQA.run()
 
 if __name__ == "__main__":
     # Example call to run_tstar with the appropriate arguments.
