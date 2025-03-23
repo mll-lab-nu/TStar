@@ -1,52 +1,53 @@
 import os
-import logging
 import json
+import logging
+import argparse
 from typing import List, Dict, Any, Optional, Tuple
+
 import cv2
+import numpy as np
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-import argparse
-import numpy as np
+
 from TStar.interface_grounding import TStarUniversalGrounder
 
-# 配置日志
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler()
-    ]
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
+
 def load_video_fps(video_path: str) -> float:
     """
-    获取视频的帧率（FPS）。
+    Get the frames-per-second (FPS) of the video.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        logger.error(f"无法打开视频文件: {video_path}")
-        raise ValueError(f"无法打开视频文件: {video_path}")
+        logger.error(f"Unable to open video file: {video_path}")
+        raise ValueError(f"Unable to open video file: {video_path}")
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
     if fps == 0:
-        logger.error(f"无法获取视频帧率（FPS）: {video_path}")
-        raise ValueError(f"无法获取视频帧率（FPS）: {video_path}")
-    logger.debug(f"视频 {video_path} 的 FPS: {fps}")
+        logger.error(f"Unable to retrieve FPS for video: {video_path}")
+        raise ValueError(f"Unable to retrieve FPS for video: {video_path}")
+    logger.debug(f"Video {video_path} FPS: {fps}")
     return fps
 
-def extract_frames(video_path: str, frame_indices: List[int] = None, numframe: int = 8) -> List[Optional[Image.Image]]:
+
+def extract_frames(video_path: str, frame_indices: Optional[List[int]] = None, numframe: int = 8) -> List[Optional[Image.Image]]:
     """
-    从视频中提取指定的帧，并转换为 PIL 图像。如果没有提供帧索引，则均匀地采样指定数量的帧。
+    Extract specified frames from a video and convert them to PIL images.
+    If frame_indices is None, uniformly sample 'numframe' frames.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise ValueError(f"无法打开视频文件: {video_path}")
+        raise ValueError(f"Unable to open video file: {video_path}")
 
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # 获取视频的总帧数
-
-    # 如果没有提供 frame_indices，进行均匀采样
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if frame_indices is None:
         frame_indices = np.linspace(0, total_frames - 1, numframe, dtype=int).tolist()
 
@@ -56,141 +57,184 @@ def extract_frames(video_path: str, frame_indices: List[int] = None, numframe: i
         ret, frame = cap.read()
         if ret:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-            frames.append(pil_image)
+            frames.append(Image.fromarray(frame_rgb))
         else:
-            frames.append(None)  # 使用 None 表示无法读取帧
-
+            frames.append(None)
     cap.release()
     return frames
+
+def match_answer(pred_answer, gt_answer):
+    import re
+
+    # Extract the first letter from the predicted answer and ground truth.
+    pred_letter_match = re.match(r"^\s*([A-Fa-f])", pred_answer)
+    gt_letter_match = gt_answer
+
+    if pred_letter_match and gt_letter_match:
+        pred_letter = pred_letter_match.group(1).lower()
+        gt_letter = gt_letter_match.group(1).lower()
+        correct = (pred_letter == gt_letter)
+    else:
+        # Fall back to full string comparison if regex fails.
+        correct = (pred_answer.strip().lower() == gt_answer.strip().lower())
+
+    return correct
+def _submit_item_task(item: Dict[str, Any], fps_cache: Dict[str, float], frame_key: str) -> Tuple[str, Dict[str, Any]]:
+    """
+    Prepare the information for a frame extraction task for one item.
+    Returns the video path and a dictionary with task details.
+    """
+    video_path = item['video_path']
+    keyframe_timestamps = item.get("keyframe_timestamps", [])
+    if frame_key == "uniform":
+        num_frames = len(keyframe_timestamps)
+        frame_indices = None
+    else:
+        keyframe_timestamps.sort()
+        frame_indices = [int(ts * load_video_fps(video_path)) for ts in keyframe_timestamps]
+        num_frames = len(frame_indices)
+
+    # Initialize QA result fields
+    item[f"{frame_key}_pred_answer"] = None
+    item["correct"] = None
+    return video_path, {"item": item, "num_frames": num_frames, "frame_indices": frame_indices}
+
+
+def _process_future_result(future, qa_results: List[Dict[str, Any]], tstar_grounder: TStarUniversalGrounder,
+                           result_data: List[Dict[str, Any]], frame_key: str, count: Dict[str, int]) -> None:
+    """
+    Process a completed future: extract frames, perform QA inference, update qa_results.
+    The count dict is used to update the total and correct counts.
+    """
+    qa_idx = future.qa_idx  # Attached to the future
+    try:
+        frames = future.result()
+    except Exception as e:
+        logger.error(f"Error extracting frames for item {qa_idx}: {e}")
+        qa_results[qa_idx][f"{frame_key}_pred_answer"] = "Frame extraction failed."
+        qa_results[qa_idx]["correct"] = False
+        return
+
+    if not frames or len(frames) < 1:
+        logger.warning(f"No frames extracted for item {qa_idx}.")
+        return
+
+    gt_image = frames[0]
+    pred_images = frames[1:]
+    if gt_image is None:
+        logger.warning(f"GT frame extraction failed for item {qa_idx}.")
+        qa_results[qa_idx]["pred_answer"] = "GT frame extraction failed."
+        qa_results[qa_idx]["correct"] = False
+        return
+
+    try:
+        pred_answer = tstar_grounder.inference_qa(
+            frames=pred_images,
+            question=result_data[qa_idx]['question'],
+            options=result_data[qa_idx]['options'],
+            temperature=0.2,
+            max_tokens=1024
+        )
+        logger.info(f"item {qa_idx} QA answer: {pred_answer}, GT answer: {result_data[qa_idx]['gt_answer']}")
+
+        gt_answer = qa_results[qa_idx]["gt_answer"].strip()
+        pred_answer = pred_answer.strip()
+        correct = match_answer(pred_answer=pred_answer, gt_answer=gt_answer)
+
+        qa_results[qa_idx][f"{frame_key}_pred_answer"] = pred_answer
+        qa_results[qa_idx]["correct"] = correct
+
+        if correct:
+            count["correct"] += 1
+        count["total"] += 1
+    except Exception as e:
+        logger.error(f"QA inference failed for item {qa_idx}: {e}")
+        qa_results[qa_idx][f"{frame_key}_pred_answer"] = "QA inference failed."
+        qa_results[qa_idx]["correct"] = False
+
 
 def compute_qa_accuracy(
     result_data: List[Dict[str, Any]],
     tstar_grounder: TStarUniversalGrounder,
-    frame_key: str ="uniform",
-    ground_truth_key: str = "gt_answer",
+    frame_key: str = "uniform",
     max_workers: int = 4,
-    output_file: str = "Rebuttal/qa_results.jsonl"
+    output_file: str = "./Rebuttal.json",
 ) -> Tuple[float, List[Dict[str, Any]]]:
     """
-    处理 result_data，执行 QA 推理，并计算 QA 准确率，动态保存每个条目的 QA 结果为 JSONL 格式。
+    Process result_data, perform QA inference, and compute QA accuracy.
+    The results for each item are saved to a JSONL file whose name is derived from the input file name plus a marker.
+    If the output file already exists, the function loads the existing results and computes accuracy from them.
     """
+
+
+    # If output file exists, assume processing is done; load results and compute accuracy.
+    if os.path.exists(output_file):
+        logger.info(f"Output file {output_file} already exists. Loading previous results.")
+        qa_results = []
+        correct_count = 0
+        total_count = 0
+        with open(output_file, "r", encoding="utf-8") as f:
+            for line in f:
+                item = json.loads(line.strip())
+                qa_results.append(item)
+                if item.get("correct"):
+                    correct_count += 1
+                total_count += 1
+        if total_count == 0:
+            accuracy = 0.0
+        else:
+            accuracy = correct_count / total_count
+        logger.info(f"QA Accuracy (loaded): {accuracy*100:.2f}% ({correct_count}/{total_count})")
+        return accuracy, qa_results
+
+    # Otherwise, process the result_data
     qa_results = []
-    correct_count = 0
-    total_count = 0
-
-    # 缓存 FPS 以避免重复加载
+    correct_count_dict = {"correct": 0, "total": 0}
     fps_cache = {}
+    futures = []
 
-    # 打开 JSONL 文件准备追加
     with open(output_file, "a", encoding="utf-8") as jsonl_file, ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_qa_idx = {}
-
-        for idx, entry in enumerate(result_data):
+        for idx, item in enumerate(result_data):
             try:
-                video_path = entry['video_path']
-                keyframe_timestamps = entry.get("keyframe_timestamps", [])
-                question = entry['question']
-                options = entry['options']
-                gt_answer = entry.get(ground_truth_key, "None")
-
-                if video_path in fps_cache:
-                    fps = fps_cache[video_path]
-                else:
-                    try:
-                        fps = load_video_fps(video_path)
-                        fps_cache[video_path] = fps
-                    except ValueError as e:
-                        logger.error(f"获取视频 {video_path} 的 FPS 失败: {e}")
-                        continue
-
-                # 提交帧提取任务
-                if frame_key == "uniform":
-                    future = executor.submit(extract_frames, video_path, None, len(keyframe_timestamps))
-                else: 
-                    keyframe_timestamps.sort()
-                    pred_frame_nums = [int(ts * fps) for ts in keyframe_timestamps]
-                    future = executor.submit(extract_frames, video_path, pred_frame_nums)
-
-                future_to_qa_idx[future] = len(qa_results)  # 映射到 qa_results 列表的索引
-
-                # 初始化 qa_results 条目
-                entry[f"{frame_key}_pred_answer"] = None
-                entry["correct"] = None
-                qa_results.append(entry)
-
+                video_path, task_info = _submit_item_task(item, fps_cache, frame_key)
+                future = executor.submit(extract_frames, video_path, task_info["frame_indices"], task_info["num_frames"])
+                future.qa_idx = idx
+                # Initialize QA result fields in the item
+                item[f"{frame_key}_pred_answer"] = None
+                item["correct"] = None
+                qa_results.append(item)
+                futures.append(future)
             except KeyError as e:
-                logger.error(f"条目 {idx} 缺少键: {e}。跳过。")
+                logger.error(f"item {idx} is missing key: {e}. Skipping.")
                 continue
             except Exception as e:
-                logger.error(f"处理条目 {idx} 时发生错误: {e}。跳过。")
+                logger.error(f"Error processing item {idx}: {e}. Skipping.")
                 continue
 
-        # 处理帧提取和 QA 推理
-        for future in tqdm(as_completed(future_to_qa_idx), total=len(future_to_qa_idx), desc="提取帧并执行 QA"):
-            qa_idx = future_to_qa_idx[future]
+        # Process futures as they complete
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Extracting frames and performing QA"):
+            qa_idx = getattr(future, "qa_idx", None)
+            if qa_idx is None:
+                continue
             try:
-                frames = future.result()
-                if not frames or len(frames) < 1:
-                    logger.warning(f"无法提取帧用于条目 {qa_idx}。")
-                    continue
-
-                gt_image = frames[0]
-                pred_images = frames[1:]
-
-                if gt_image is None:
-                    logger.warning(f"条目 {qa_idx} 的 gt 帧提取失败。")
-                    qa_results[qa_idx]["pred_answer"] = "无法提取 gt 帧。"
-                    qa_results[qa_idx]["correct"] = False
-                    continue
-
-                # 执行 QA 推理
-                try:
-                    # 使用预测帧执行 QA 推理
-                    pred_answer = tstar_grounder.inference_qa(
-                        frames=pred_images,
-                        question=result_data[qa_idx]['question'],
-                        options=result_data[qa_idx]['options'],
-                        temperature=0.2,
-                        max_tokens=1024
-                    )
-                    print(f"条目 {qa_idx} 的 QA 答案: {pred_answer}")
-
-                    # 比较预测答案与真实答案（忽略大小写和前后空格）
-                    gt_answer_clean = qa_results[qa_idx]["gt_answer"].strip().lower()
-                    pred_answer_clean = pred_answer.strip().lower()
-
-                    correct = (pred_answer_clean == gt_answer_clean)
-                    qa_results[qa_idx][f"{frame_key}_pred_answer"] = pred_answer
-                    qa_results[qa_idx]["correct"] = correct
-
-                    if correct:
-                        correct_count += 1
-                    total_count += 1
-
-                except Exception as e:
-                    logger.error(f"条目 {qa_idx} 的 QA 推理失败: {e}")
-                    qa_results[qa_idx][f"{frame_key}_pred_answer"] = "QA 推理失败。"
-                    qa_results[qa_idx]["correct"] = False
-
+                _process_future_result(future, qa_results, tstar_grounder, result_data, frame_key, correct_count_dict)
             except Exception as e:
-                logger.error(f"提取帧或执行 QA 推理时发生错误 for 条目 {qa_idx}: {e}")
-                qa_results[qa_idx][f"{frame_key}_pred_answer"] = "处理失败。"
+                logger.error(f"Error processing future for item {qa_idx}: {e}")
+                qa_results[qa_idx][f"{frame_key}_pred_answer"] = "Processing failed."
                 qa_results[qa_idx]["correct"] = False
 
-            # 将每个条目的结果以 JSON 格式写入文件
             json.dump(qa_results[qa_idx], jsonl_file, ensure_ascii=False)
             jsonl_file.write("\n")
 
-    if total_count == 0:
-        logger.warning("没有执行任何 QA 评估。")
+    if correct_count_dict["total"] == 0:
+        logger.warning("No QA evaluations were performed.")
         accuracy = 0.0
     else:
-        accuracy = correct_count / total_count
+        accuracy = correct_count_dict["correct"] / correct_count_dict["total"]
 
-    logger.info(f"QA 准确率: {accuracy*100:.2f}% ({correct_count}/{total_count})")
-
+    logger.info(f"QA Accuracy: {accuracy*100:.2f}% ({correct_count_dict['correct']}/{correct_count_dict['total']})")
     return accuracy, qa_results
+
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -199,67 +243,40 @@ def parse_arguments() -> argparse.Namespace:
     Returns:
         argparse.Namespace: Parsed arguments.
     """
-    parser = argparse.ArgumentParser(
-        description="Calculate PRF and SSIM metrics from video analysis results."
-    )
-    parser.add_argument(
-        '--result_path',
-        type=str,
-        default="./Datasets/LongVideoHaystack_tiny.json",
-        help='Path to the input JSON file containing video analysis results.'
-    )
-    parser.add_argument(
-        '--output_path',
-        type=str,
-        default='metrics_results.json',
-        help='Path to save the calculated metrics results.'
-    )
-    parser.add_argument(
-        '--fps',
-        type=float,
-        default=1.0,
-        help='Frames per second (FPS) of the videos.'
-    )
-    parser.add_argument(
-        '--threshold',
-        type=int,
-        default=5,
-        help='Distance threshold for PRF calculation.'
-    )
-    parser.add_argument(
-        '--max_workers',
-        type=int,
-        default=4,
-        help='Maximum number of threads for parallel processing.'
-    )
+    parser = argparse.ArgumentParser(description="TStarSearcher: Video Frame Search and QA Tool")
+
+    # Data meta processing arguments
+    parser.add_argument('--backend', type=str, default="gpt-4o", help='The backend used for question qa.')
+    parser.add_argument('--json_file', type=str, default="2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json", help='The video dataset used for processing.')
+    parser.add_argument('--frame_key', type=str, default="keyframe_timestamps", help='Frame sampling method.')
+    parser.add_argument('--num_frame', type=int, default=8, help='The number of frames fed into qa model.')
     return parser.parse_args()
 
 if __name__ == "__main__":
-    """
-    Main function to execute metrics calculation.
-    """
+    np.random.seed(2025)
     args = parse_arguments()
-
     # 初始化 TStarUniversalGrounder
     tstar_grounder = TStarUniversalGrounder(
-        model_name="gpt-4o",
-        num_frames=8
+        model_name=args.backend,
     )
 
     # 加载 result_data 从 JSON 文件
-    data_json_path = args.result_path
+    frame_search_root = "./results/frame_search"
+    data_json_path = os.path.join(frame_search_root, args.json_file)
     with open(data_json_path, "r", encoding="utf-8") as f:
-        result_data = json.load(f)#[0:2]
+        result_data = json.load(f)[0:4]
+    
+    output_root = "./results/last_version"
+    os.makedirs(output_root, exist_ok=True)
 
-    # 计算 QA 准确率
+    # Compute QA accuracy.
+    # The output file name is generated from the input file name and saved in args.output_dir.
     accuracy, qa_results = compute_qa_accuracy(
         result_data=result_data,
         tstar_grounder=tstar_grounder,
-        ground_truth_key="gt_answer",  # 根据实际 JSON 结构调整 "gt_answer"
-        frame_key="keyframe_timestamps", # uniform
+        frame_key=args.frame_key,
         max_workers=1,
-        output_file="./Datasets/QA_LongVideoHaystack_tiny.jsonl"
+        output_file=os.path.join(output_root, args.json_file.replace(".json", "qa_" + str(args.num_frame) + "frames_" + args.backend + "_" + args.frame_key + ".json"))
     )
 
-    # 打印准确率
     print(f"QA Accuracy: {accuracy*100:.2f}%")

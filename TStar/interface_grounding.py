@@ -231,7 +231,7 @@ class TStarUniversalGrounder:
         model_path: Optional[str] = None,
         model_base: Optional[str] = None,
         gpt4_api_key: Optional[str] = None,
-        num_frames: Optional[int] = 8,
+        num_frames: Optional[int] = 16,
     ):
         self.backend = model_name.lower()
         self.num_frames = num_frames
