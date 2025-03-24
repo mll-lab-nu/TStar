@@ -70,7 +70,7 @@ class TStarSearcher:
         self.search_budget = min(1000, self.total_frame_num * search_budget)
 
         # Initialize distributions and histories
-        self.score_distribution = np.zeros(self.total_frame_num)
+        self.score_distribution = np.zeros(self.total_frame_num) + 1e-6  # a small constant
         self.non_visiting_frames = np.ones(self.total_frame_num)
         self.P = np.ones(self.total_frame_num) * self.confidence_threshold * 0.3
 
@@ -362,6 +362,23 @@ class TStarSearcher:
         resized_frames = [cv2.resize(frame, (200 * 4, 95 * 4)) for frame in frames]
         return sampled_frame_secs.tolist(), resized_frames
 
+    def pop_frames(self, 
+                    video_path: str,
+                    num_samples: int):
+        # Normalize the score distribution to obtain probabilities.
+        _P = self.score_distribution / self.score_distribution.sum()
+        
+        # Sample frame seconds directly using the probability distribution.
+        sampled_frame_secs = np.random.choice(self.total_frame_num, size=num_samples, replace=False, p=_P)
+        sampled_frame_secs.sort()
+        time_stamps_secs = [sec / self.fps for sec in sampled_frame_secs]
+        # Convert the sampled seconds to raw frame indices.
+        frame_indices_in_video = [sec * self.raw_fps / self.fps for sec in time_stamps_secs]
+        
+        # Read the frames from the video.
+        indices, frames = self.read_frame_batch(video_path, frame_indices_in_video)
+        return frames, time_stamps_secs
+
     # --- Verification Methods ---
     def verify_and_remove_target(
         self,
@@ -471,16 +488,8 @@ class TStarSearcher:
             progress_bar.update(1)
         progress_bar.close()
 
-        top_k_indices = np.argsort(self.score_distribution)[-K:][::-1]
-        top_k_frames = []
-        time_stamps = []
-        for idx in top_k_indices:
-            frame_idx = int(idx * self.raw_fps / self.fps)
-            _, frame = self.read_frame_batch(self.video_path, [frame_idx])
-            top_k_frames.append(frame[0])
-            time_stamps.append(idx / self.fps)
-
-        return top_k_frames, time_stamps
+        k_frames, time_stamps = self.pop_frames(video_path=self.video_path, num_samples=self.search_nframes)
+        return k_frames, time_stamps
 
     def search_with_visualization(self) -> Tuple[List[np.ndarray], List[float]]:
         """
@@ -526,17 +535,8 @@ class TStarSearcher:
             progress_bar.update(1)
         progress_bar.close()
 
-        top_k_indices = np.argsort(self.score_distribution)[-K:][::-1]
-        top_k_frames = []
-        time_stamps = []
-        for idx in top_k_indices:
-            frame_idx = int(idx * self.raw_fps / self.fps)
-            _, frame = self.read_frame_batch(self.video_path, [frame_idx])
-            top_k_frames.append(frame[0])
-            time_stamps.append(idx / self.fps)
-
-        return top_k_frames, time_stamps
-
+        k_frames, time_stamps = self.pop_frames(video_path=self.video_path, num_samples=self.search_nframes)
+        return k_frames, time_stamps
 
 # Example usage
 if __name__ == "__main__":

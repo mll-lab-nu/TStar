@@ -133,7 +133,7 @@ class YoloWorldInterface(HeuristicInterface):
         )
         return detections
     
-    def inference_detector(self, images, max_dets=50, score_threshold=0.2, use_amp: bool = False):
+    def inference_detector(self, images, max_dets=50, score_threshold=0.12, use_amp: bool = False):
         data_info = dict(img_id=0, img=images[0], texts=self.texts) #TBD for batch searching
         data_info = self.test_pipeline(data_info)
         data_batch = dict(inputs=data_info['inputs'].unsqueeze(0),
@@ -240,7 +240,7 @@ class OWLInterface(HeuristicInterface):
 
             target_sizes = torch.tensor([[height, width] for i in batch_images]) 
             results = self.processor.post_process_grounded_object_detection(
-                outputs=outputs, target_sizes=target_sizes, threshold=0.05)
+                outputs=outputs, target_sizes=target_sizes, threshold=0.005)
         for result in results:
             detections = sv.Detections.from_transformers(transformers_results=result)
             detections_inbatch.append(detections)

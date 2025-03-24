@@ -78,7 +78,7 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
         except Exception as e:
             print(f"Error processing item {idx+1}: {str(e)}")
 
-    return TStar_format_data[:2] # [:2] for debug
+    return TStar_format_data #[0:10] # [:2] for debug
 
 
 
@@ -120,7 +120,7 @@ def get_TStar_search_results(args, data_item,
     # Initialize Searching Targets to TStar Seacher
     video_searcher = TStar_searcher.initialize_videoSearcher(target_objects, cue_objects)
     # Perform search
-    all_frames, time_stamps = TStar_searcher.perform_search(video_searcher)
+    all_frames, time_stamps = TStar_searcher.perform_search(video_searcher, visualization=True)
     time_stamps.sort()
 
     # Output the results
@@ -136,7 +136,7 @@ def get_TStar_search_results(args, data_item,
         "video_path": data_item['video_path'],
         "grounding_objects": {"target_objects": target_objects, "cue_objects": cue_objects},
         "keyframe_timestamps": time_stamps,
-        "score_distribution": video_searcher.Score_history[-1]
+        "keyframe_distribution": video_searcher.P_history[-1]
     }
 
     return result
@@ -151,10 +151,9 @@ def main():
 
     # Data meta processing arguments
     parser.add_argument('--dataset_meta', type=str, default="LVHaystack/LongVideoHaystack", help='Path to the input JSON file for batch processing.')
-    parser.add_argument('--split', type=str, default="test", help='Path to the input JSON file for batch processing.')
-    
+    parser.add_argument('--split', type=str, default="test_tiny", help='Path to the input JSON file for batch processing.')    
     parser.add_argument('--video_root', type=str, default='./Datasets/ego4d_data/ego4d_data/v1/256p', help='Root directory where the input video files are stored.')
-    parser.add_argument('--output_json', type=str, default='./Datasets/LongVideoHaystack_test_check.json', help='Path to save the batch processing results.')
+    parser.add_argument('--output_json_name', type=str, default='TStar_LongVideoHaystack_tiny.json', help='Path to save the batch processing results.')
     
     # search tools
     parser.add_argument('--grounder', type=str, default='gpt-4o', help='Directory to save outputs.')
@@ -197,18 +196,13 @@ def main():
         except Exception as e:
             print(f"Error processing {data_item['video_id']}: {e}")
             continue
-            result = {
-                "video_id": data_item.get('video_id', ''),
-                "grounding_objects": [],
-                "frame_timestamps": [],
-                "answer": "",
-                "error": str(e)
-            }
+
         data_item.update(result)
         results.append(data_item)
     
     # Save batch results to output_json
-    output_json = args.output_json
+    frame_search_root = "./results/frame_search"
+    output_json = os.path.join(frame_search_root, f"{args.heuristic}_{args.output_json_name}")
     with open(output_json, 'w', encoding='utf-8') as f_out:
         json.dump(results, f_out, indent=4, ensure_ascii=False)
     

@@ -45,7 +45,7 @@ class TStarFramework:
         self.search_nframes = search_nframes
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
-        self.output_dir = os.path.join(output_dir, os.path.basename(video_path).split('.')[0])
+        self.output_dir = os.path.join(output_dir, os.path.basename(video_path).split('.')[0], question[:-1])
         self.confidence_threshold = confidence_threshold
         self.search_budget = search_budget
         self._create_output_dir()
@@ -65,11 +65,6 @@ class TStarFramework:
         target_objects, cue_objects = self.get_grounded_objects()
         video_searcher = self.initialize_videoSearcher(target_objects, cue_objects)
         all_frames, time_stamps = self.perform_search(video_searcher, visualization=True)
-
-        self._save_frames(all_frames, time_stamps)
-        self._save_searching_iterations(video_searcher)
-        self._plot_and_save_scores(video_searcher)
-
         answer = self.perform_qa(all_frames)
         logger.info(f"Answer: {answer}")
         
@@ -118,7 +113,10 @@ class TStarFramework:
         Perform the search for relevant frames and their timestamps.
         """
         if visualization:
-            all_frames, time_stamps = video_searcher.search_with_visualization()
+            all_frames, time_stamps = video_searcher.search()
+            self._save_frames(all_frames, time_stamps)
+            self._save_searching_iterations(video_searcher)
+            self._plot_and_save_scores(video_searcher)
         else:
             all_frames, time_stamps = video_searcher.search()
         
@@ -179,7 +177,7 @@ def initialize_heuristic(heuristic_type: str = "owl-vit") -> HeuristicInterface:
         owl_interface = OWLInterface(model_name_or_path=model_name)
         logger.info("OWLInterface initialized successfully.")
         return owl_interface
-    elif heuristic_type == 'yolo_model':
+    elif heuristic_type == 'yolo-World':
         config_path = "./YOLO-World/configs/pretrain/yolo_world_v2_xl_vlpan_bn_2e-3_100e_4x8gpus_obj365v1_goldg_train_lvis_minival.py"
         checkpoint_path = "./pretrained/YOLO-World/yolo_world_v2_xl_obj365v1_goldg_cc3mlite_pretrain-5daf1395.pth"
         yolo_interface = YoloWorldInterface(config_path=config_path, checkpoint_path=checkpoint_path)
