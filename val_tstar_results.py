@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 Metrics Calculation Script
 
 This script reads a JSON file containing video analysis results, extracts ground truth and predicted frame timestamps,
-and calculates PRF (Precision, Recall, F1 Score) and SSIM (Structural Similarity Index) scores.
+and calculates Temporal PRF (Precision, Recall, F1) and SSIM (Structural Similarity Index) metrics.
 
 Usage:
     python calculate_metrics.py --search_result_path <path_to_json> --fps <video_fps>
@@ -15,33 +14,43 @@ Dependencies:
     - opencv-python
     - scikit-image
     - tqdm
-    - KFSBench (ensure it's installed and accessible)
+    - torch
 """
 
 import os
+import sys
 import json
 import argparse
 import logging
 from typing import List, Tuple, Any, Dict
+
 import numpy as np
 import cv2
+import torch
+import torch.nn.functional as F
 from skimage.metrics import structural_similarity as ssim
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-import sys
-import torch
-import numpy as np
-import torch.nn.functional as F
-from typing import List, Tuple
 
+# -----------------------------------------------------------------------------
+# Logging Configuration
+# -----------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# Utility Functions (SSIM Calculation)
+# -----------------------------------------------------------------------------
 def gaussian_kernel(window_size: int, sigma: float) -> torch.Tensor:
     """Creates a 1D Gaussian kernel."""
     coords = torch.arange(window_size, dtype=torch.float32) - window_size // 2
     g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
     g /= g.sum()
     return g
-
 
 def create_window(window_size: int, channel: int) -> torch.Tensor:
     """Creates a 2D Gaussian kernel window."""
@@ -50,15 +59,13 @@ def create_window(window_size: int, channel: int) -> torch.Tensor:
     window = window_2d.expand(channel, 1, window_size, window_size)
     return window
 
-
-def ssim_torch(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11, C1: float = 0.01**2, C2: float = 0.03**2) -> float:
-    """Calculates the Structural Similarity Index (SSIM) between two images."""
+def ssim_torch(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11,
+               C1: float = 0.01**2, C2: float = 0.03**2) -> float:
+    """Calculates the SSIM between two images using PyTorch."""
     channel = img1.size(0)
     window = create_window(window_size, channel).to(img1.device)
-
     mu1 = F.conv2d(img1.unsqueeze(0), window, padding=window_size // 2, groups=channel)
     mu2 = F.conv2d(img2.unsqueeze(0), window, padding=window_size // 2, groups=channel)
-
     mu1_sq = mu1.pow(2)
     mu2_sq = mu2.pow(2)
     mu1_mu2 = mu1 * mu2
@@ -70,90 +77,80 @@ def ssim_torch(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11, C1
     ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
     return ssim_map.mean()
 
-def pairwise_ssim(gt_frames: List[np.ndarray], pred_frames: List[np.ndarray]) -> List[Tuple[Tuple[int, int], float]]:
-    """Calculates SSIM for each pair in a list of decoded frames."""
-    # Move frames to a list of tensors and place on GPU if available
+def pairwise_ssim(gt_frames: List[np.ndarray], pred_frames: List[np.ndarray]) -> np.ndarray:
+    """
+    Calculates pairwise SSIM between two lists of images.
+    Returns a numpy array of shape (num_gt, num_pred) containing SSIM scores.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if gt_frames[0].dtype == np.uint8:
-        gt_frames_torch = [torch.tensor(frame, dtype=torch.float32, device=device) / 255.0 for frame in gt_frames]
-        pred_frames_torch = [torch.tensor(frame, dtype=torch.float32, device=device) / 255.0 for frame in pred_frames]
-    else: # maybe already torch
-        gt_frames_torch = gt_frames
-        pred_frames_torch = pred_frames
+    # Convert images to torch tensors and scale to [0, 1]
+    gt_tensors = [torch.tensor(frame, dtype=torch.float32, device=device) / 255.0 for frame in gt_frames]
+    pred_tensors = [torch.tensor(frame, dtype=torch.float32, device=device) / 255.0 for frame in pred_frames]
 
-    # List to store SSIM results
-    ssim_results = np.zeros((len(gt_frames), len(pred_frames)))
-    for i in range(len(gt_frames_torch)):
-        for j in range(len(pred_frames_torch)):
-            ssim_score = ssim_torch(gt_frames_torch[i], pred_frames_torch[j])
-            ssim_results[i][j] = ssim_score.item()
-            
+    ssim_results = np.zeros((len(gt_tensors), len(pred_tensors)))
+    for i in range(len(gt_tensors)):
+        for j in range(len(pred_tensors)):
+            ssim_score = ssim_torch(gt_tensors[i], pred_tensors[j])
+            ssim_results[i, j] = ssim_score.item()
     return ssim_results
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-
-def parse_arguments() -> argparse.Namespace:
+# -----------------------------------------------------------------------------
+# Video I/O Functions
+# -----------------------------------------------------------------------------
+def load_video_fps(video_path: str) -> float:
     """
-    Parse command-line arguments.
+    Get the frames per second (FPS) of a video.
+    
+    Raises:
+        ValueError: If the video cannot be opened.
+    """
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        logger.error(f"Cannot open video file: {video_path}")
+        raise ValueError(f"Cannot open video file: {video_path}")
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+    logger.debug(f"Video FPS for {video_path}: {fps}")
+    return fps
 
+def extract_frames(video_path: str, frame_indices: List[int]) -> List[np.ndarray]:
+    """
+    Extract specified frames from a video.
+    
+    Args:
+        video_path: Path to the video file.
+        frame_indices: List of frame indices to extract.
+    
     Returns:
-        argparse.Namespace: Parsed arguments.
+        List of extracted frames (RGB format). If a frame is not read successfully,
+        an empty numpy array is returned in its place.
     """
-    parser = argparse.ArgumentParser(
-        description="Calculate PRF and SSIM metrics from video analysis results."
-    )
-    parser.add_argument(
-        '--search_result_path',
-        type=str,
-        default="results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json",
-        help='Path to the input JSON file containing video analysis results.'
-    )
-    parser.add_argument(
-        '--output_path',
-        type=str,
-        default='/data/guoweiyu/LV-Haystack/results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json',
-        help='Path to save the calculated metrics results.'
-    )
-    parser.add_argument(
-        '--fps',
-        type=float,
-        default=1.0,
-        help='Frames per second (FPS) of the videos.'
-    )
-    parser.add_argument(
-        '--threshold',
-        type=int,
-        default=5,
-        help='Distance threshold for PRF calculation.'
-    )
-    parser.add_argument(
-        '--max_workers',
-        type=int,
-        default=4,
-        help='Maximum number of threads for parallel processing.'
-    )
-    return parser.parse_args()
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        logger.error(f"Cannot open video file: {video_path}")
+        raise ValueError(f"Cannot open video file: {video_path}")
 
+    frames = []
+    for idx in frame_indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, frame = cap.read()
+        if ret:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(frame_rgb)
+            logger.debug(f"Extracted frame {idx} from {video_path}")
+        else:
+            frames.append(np.array([]))
+            logger.warning(f"Failed to extract frame {idx} from {video_path}")
+    cap.release()
+    return frames
 
+# -----------------------------------------------------------------------------
+# JSON I/O Functions
+# -----------------------------------------------------------------------------
 def load_json_file(file_path: str) -> Any:
     """
     Load a JSON file.
-
-    Args:
-        file_path (str): Path to the JSON file.
-
-    Returns:
-        Any: Parsed JSON data.
-
+    
     Raises:
         FileNotFoundError: If the file does not exist.
         json.JSONDecodeError: If the file is not valid JSON.
@@ -171,114 +168,32 @@ def load_json_file(file_path: str) -> Any:
             logger.error(f"Error decoding JSON file: {file_path}")
             raise e
 
-
 def save_json_file(data: Any, file_path: str) -> None:
-    """
-    Save data to a JSON file.
-
-    Args:
-        data (Any): Data to be saved.
-        file_path (str): Path to the output JSON file.
-    """
+    """Save data to a JSON file."""
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
     logger.info(f"Metrics results saved to: {file_path}")
 
-
-def calculate_annd(list_gt: List[np.ndarray], list_pred: List[np.ndarray]) -> List[Tuple[float, float]]:
-    """
-    Calculate Average Nearest Neighbor Distance (ANND) between two lists of numpy arrays.
-
-    Args:
-        list_gt (List[np.ndarray]): List of ground truth frame numbers.
-        list_pred (List[np.ndarray]): List of predicted frame numbers.
-
-    Returns:
-        List[Tuple[float, float]]: List of (precision, recall) tuples.
-    """
-    annd_list = []
-    for gt_array, pred_array in zip(list_gt, list_pred):
-        # Skip if either array is empty
-        if gt_array.size == 0 or pred_array.size == 0:
-            continue
-
-        # Calculate minimum distances from each point in gt_array to pred_array and vice versa
-        distances_gt_to_pred = np.min(np.abs(gt_array[:, np.newaxis] - pred_array), axis=1)
-        distances_pred_to_gt = np.min(np.abs(pred_array[:, np.newaxis] - gt_array), axis=1)
-
-        # Compute mean distances for precision (gt -> pred) and recall (pred -> gt)
-        annd_precision = np.mean(distances_pred_to_gt)
-        annd_recall = np.mean(distances_gt_to_pred)
-        annd_list.append((annd_precision, annd_recall))
-
-    return annd_list
-
-
-def calculate_ssim_scores(list_gt_images: List[List[np.ndarray]], list_pred_images: List[List[np.ndarray]]) -> List[Tuple[float, float]]:
-    """
-    Calculate Structural Similarity Index (SSIM) between two lists of image arrays.
-    Args:
-        list_gt_images (List[List[np.ndarray]]): List of ground truth image arrays per video.
-        list_pred_images (List[List[np.ndarray]]): List of predicted image arrays per video.
-    Returns:
-        List[Tuple[float, float]]: List of (precision_ssim, recall_ssim) tuples.
-    """
-    ssim_list = []
-    for gt_images, pred_images in zip(list_gt_images, list_pred_images):
-        # Skip if either list is empty
-        if not gt_images or not pred_images:
-            continue
-        paired_gt = []
-        paired_pred = []
-        for i in range(len(gt_images)):
-            if gt_images[i].size == 0:
-                continue
-            paired_gt.append(gt_images[i])
-        for i in range(len(pred_images)):
-            if pred_images[i].size == 0:
-                continue
-            paired_pred.append(pred_images[i])
-        # Compute pairwise SSIM
-        ssim_cur_list = pairwise_ssim(paired_gt, paired_pred)
-        # print(ssim_cur_list)
-        # Compute mean SSIM for precision and recall
-        if ssim_cur_list.size == 0:
-            continue
-        ssim_precision = np.mean(np.max(ssim_cur_list, axis=0))
-        ssim_recall = np.mean(np.max(ssim_cur_list, axis=1))
-        ssim_list.append((ssim_precision, ssim_recall))
-    return ssim_list
-
+# -----------------------------------------------------------------------------
+# Metrics Calculation Functions
+# -----------------------------------------------------------------------------
 def calculate_prf(list_gt: List[np.ndarray], list_pred: List[np.ndarray], threshold: int = 5) -> Tuple[float, float, float]:
     """
-    Calculate Precision, Recall, and F1 Score based on frame coverage.
-
-    Args:
-        list_gt (List[np.ndarray]): List of ground truth frame numbers.
-        list_pred (List[np.ndarray]): List of predicted frame numbers.
-        threshold (int, optional): Distance threshold. Defaults to 5.
-
-    Returns:
-        Tuple[float, float, float]: Average Precision, Recall, and F1 Score.
+    Calculate average Temporal Precision, Recall and F1 Score based on frame distances.
     """
     precision_list, recall_list, f1_list = [], [], []
     for gt_array, pred_array in zip(list_gt, list_pred):
-        # Skip if either array is empty
         if gt_array.size == 0 or pred_array.size == 0:
             continue
-
-        # Calculate distances from each gt frame to pred frames
+        # Compute the minimum absolute differences between predicted and ground truth frame numbers.
         distances_gt_to_pred = np.min(np.abs(gt_array[:, np.newaxis] - pred_array), axis=1)
-        # Calculate distances from each pred frame to gt frames
         distances_pred_to_gt = np.min(np.abs(pred_array[:, np.newaxis] - gt_array), axis=1)
 
-        # Frames within the threshold
         covered_gt = np.sum(distances_gt_to_pred <= threshold)
         covered_pred = np.sum(distances_pred_to_gt <= threshold)
         total_gt_frames = len(gt_array)
         total_pred_frames = len(pred_array)
 
-        # Calculate Precision, Recall, F1
         precision = covered_pred / total_pred_frames if total_pred_frames > 0 else 0.0
         recall = covered_gt / total_gt_frames if total_gt_frames > 0 else 0.0
         f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
@@ -287,140 +202,93 @@ def calculate_prf(list_gt: List[np.ndarray], list_pred: List[np.ndarray], thresh
         recall_list.append(recall)
         f1_list.append(f1)
 
-    # Compute average metrics
     avg_precision = np.mean(precision_list) if precision_list else 0.0
     avg_recall = np.mean(recall_list) if recall_list else 0.0
     avg_f1 = np.mean(f1_list) if f1_list else 0.0
-
     return avg_precision, avg_recall, avg_f1
 
-
-def load_video_fps(video_path: str) -> float:
+def calculate_ssim_scores(list_gt_images: List[List[np.ndarray]], list_pred_images: List[List[np.ndarray]]) -> List[Tuple[float, float]]:
     """
-    Get the frames per second (FPS) of a video.
-
-    Args:
-        video_path (str): Path to the video file.
-
-    Returns:
-        float: FPS of the video.
-
-    Raises:
-        ValueError: If the video cannot be opened.
+    Calculate SSIM Precision and Recall for each video entry.
+    
+    For each video:
+      - SSIM Precision is computed as the mean of the maximum SSIM values for each predicted frame (across all ground truth frames).
+      - SSIM Recall is computed as the mean of the maximum SSIM values for each ground truth frame (across all predicted frames).
     """
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        logger.error(f"Cannot open video file: {video_path}")
-        raise ValueError(f"Cannot open video file: {video_path}")
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    cap.release()
-    logger.debug(f"Video FPS for {video_path}: {fps}")
-    return fps
+    ssim_list = []
+    for gt_images, pred_images in zip(list_gt_images, list_pred_images):
+        if not gt_images or not pred_images:
+            continue
 
+        # Filter out empty images
+        paired_gt = [img for img in gt_images if img.size > 0]
+        paired_pred = [img for img in pred_images if img.size > 0]
+        if not paired_gt or not paired_pred:
+            continue
 
-def extract_frames(video_path: str, frame_indices: List[int]) -> List[np.ndarray]:
+        ssim_matrix = pairwise_ssim(paired_gt, paired_pred)
+        ssim_precision = np.mean(np.max(ssim_matrix, axis=0))
+        ssim_recall = np.mean(np.max(ssim_matrix, axis=1))
+        ssim_list.append((ssim_precision, ssim_recall))
+    return ssim_list
+
+def calculate_annd(list_gt: List[np.ndarray], list_pred: List[np.ndarray]) -> List[Tuple[float, float]]:
     """
-    Extract specified frames from a video.
-
-    Args:
-        video_path (str): Path to the video file.
-        frame_indices (List[int]): List of frame indices to extract.
-
-    Returns:
-        List[np.ndarray]: List of extracted frames in RGB format.
+    Calculate the Average Nearest Neighbor Distance (ANND) for each video entry.
+    Returns a list of (precision, recall) tuples.
     """
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        logger.error(f"Cannot open video file: {video_path}")
-        raise ValueError(f"Cannot open video file: {video_path}")
+    annd_list = []
+    for gt_array, pred_array in zip(list_gt, list_pred):
+        if gt_array.size == 0 or pred_array.size == 0:
+            continue
 
-    frames = []
-    for idx in frame_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = cap.read()
-        if ret:
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frames.append(frame_rgb)
-            logger.debug(f"Extracted frame {idx} from {video_path}")
-        else:
-            frames.append(np.array([]))  # Append empty array if frame cannot be read
-            logger.warning(f"Failed to extract frame {idx} from {video_path}")
+        distances_gt_to_pred = np.min(np.abs(gt_array[:, np.newaxis] - pred_array), axis=1)
+        distances_pred_to_gt = np.min(np.abs(pred_array[:, np.newaxis] - gt_array), axis=1)
+        annd_precision = np.mean(distances_pred_to_gt)
+        annd_recall = np.mean(distances_gt_to_pred)
+        annd_list.append((annd_precision, annd_recall))
+    return annd_list
 
-    cap.release()
-    return frames
-
-
-def extract_metrics_data(
-    result_data: List[Dict[str, Any]],
-) -> Tuple[List[str], List[List[float]], List[float]]:
+def extract_metrics_data(result_data: List[Dict[str, Any]]) -> Tuple[List[str], List[List[float]], List[List[float]]]:
     """
-    处理原始 JSON 数据，将 'position' 从帧索引转换为秒，并提取 'video_path' 和 'frame_timestamps'。
-
-    Args:
-        result_data (List[Dict[str, Any]]): 从 JSON 文件加载的原始数据。
-        fps_override (Optional[Dict[str, float]], optional): 
-            覆盖特定视频的 FPS 值。键为 'video_path'，值为 FPS。
-            默认为 None，表示自动加载每个视频的 FPS。
-
-    Returns:
-        Tuple[List[str], List[List[float]], List[float]]: 
-            - video_paths (List[str]): 视频文件路径列表。
-            - searching_sec (List[List[float]]): 每个视频预测的关键帧时间戳（秒）的列表。
-            - gt_seconds (List[float]): 每个视频真实的关键帧时间（秒）的列表。
-
-    Raises:
-        KeyError: 如果某个条目缺少必需的字段。
-        ValueError: 如果 FPS 加载失败。
+    Process the raw JSON data:
+      - Extract video paths.
+      - Convert ground truth frame indices to seconds.
+      - Extract predicted keyframe timestamps (assumed to be in seconds).
     """
     video_paths = []
     searching_sec = []
     gt_seconds = []
-
     for idx, item in enumerate(result_data):
         try:
             video_path = item['video_path']
-            frame_timestamps = item['keyframe_timestamps']
+            frame_timestamps = item['keyframe_timestamps']  # predicted timestamps (seconds)
             gt_frame_indexes = item['gt_frame_index']
         except KeyError as e:
-            logger.error(f"条目 {idx} 缺少必要字段: {e}")
-            continue  
+            logger.error(f"Entry {idx} missing required field: {e}")
+            continue
 
         try:
-            fps = load_video_fps(video_path)
+            fps_video = load_video_fps(video_path)
         except ValueError as e:
-            logger.error(f"获取视频 {video_path} 的 FPS 失败: {e}")
-            continue  # 跳过无法获取 FPS 的条目
+            logger.error(f"Failed to get FPS for video {video_path}: {e}")
+            continue
 
-        # 将 'position' 从帧索引转换为秒
-        gt_sec = [position / fps for position in gt_frame_indexes]
+        gt_sec = [position / fps_video for position in gt_frame_indexes]
         searching_sec.append(frame_timestamps)
         gt_seconds.append(gt_sec)
         video_paths.append(video_path)
 
-        # logger.debug(f"处理视频 {video_path}: frame_timestamps={frame_timestamps}, gt_sec={gt_sec}")
-
     return video_paths, searching_sec, gt_seconds
 
-def calculate_metrics(
-    result_data: List[Dict[str, Any]],
-    fps: float = 30,
-    threshold: int = 5,
-    max_workers: int = 4
-) -> Dict[str, Any]:
+def calculate_metrics(result_data: List[Dict[str, Any]], 
+                      pred_index_key="keyframe_timestamps",
+                      fps: float = 30, threshold: int = 5,
+                      max_workers: int = 4) -> Dict[str, Any]:
     """
-    Calculate PRF and SSIM metrics for all video entries.
-
-    Args:
-        result_data (List[Dict[str, Any]]): List of video result entries.
-        fps (float): Frames per second of the videos.
-        threshold (int, optional): Distance threshold for PRF calculation. Defaults to 5.
-        max_workers (int, optional): Number of threads for parallel processing. Defaults to 4.
-
-    Returns:
-        Dict[str, Any]: Dictionary containing average PRF and SSIM metrics.
+    Calculate Temporal PRF and SSIM metrics for all video entries.
     """
-  
-    video_paths, searching_sec, gt_seconds = extract_metrics_data(result_data=result_data)
+    video_paths, searching_sec, gt_seconds = extract_metrics_data(result_data)
     list_gt = []
     list_pred = []
     list_gt_images = []
@@ -430,18 +298,13 @@ def calculate_metrics(
         future_to_idx = {}
         for idx, (video_path, pred_timestamps, gt_positions) in enumerate(zip(video_paths, searching_sec, gt_seconds)):
             try:
-                # Convert seconds to frame numbers
                 gt_frame_nums = np.array(gt_positions, dtype=int)
                 pred_frame_nums = np.array([int(ts * fps) for ts in pred_timestamps], dtype=int)
-
                 list_gt.append(gt_frame_nums)
                 list_pred.append(pred_frame_nums)
-
-                # Combine gt and pred frame numbers for extraction
                 combined_frames = gt_frame_nums.tolist() + pred_frame_nums.tolist()
                 future = executor.submit(extract_frames, video_path, combined_frames)
                 future_to_idx[future] = idx
-
             except Exception as e:
                 logger.error(f"Error processing video {video_path}: {e}")
                 list_gt.append(np.array([]))
@@ -449,7 +312,6 @@ def calculate_metrics(
                 list_gt_images.append([])
                 list_pred_images.append([])
 
-        # Process frame extraction with progress bar
         for future in tqdm(as_completed(future_to_idx), total=len(future_to_idx), desc="Extracting Frames"):
             idx = future_to_idx[future]
             try:
@@ -462,26 +324,23 @@ def calculate_metrics(
 
                 item = result_data[idx]
                 gt_num = len(item['gt_frame_index'])
-                pred_num = len(item['keyframe_timestamps'])
+                pred_num = len(item[pred_index_key])
                 gt_images = frames[:gt_num]
                 pred_images = frames[gt_num:gt_num + pred_num]
 
                 list_gt_images.append(gt_images)
                 list_pred_images.append(pred_images)
-
             except Exception as e:
                 logger.error(f"Error extracting frames for video index {idx}: {e}")
                 list_gt_images.append([])
                 list_pred_images.append([])
 
-    # Calculate PRF Scores
-    logger.info("Calculating PRF Scores...")
+    logger.info("Calculating Temporal PRF Scores...")
     avg_precision, avg_recall, avg_f1 = calculate_prf(list_gt, list_pred, threshold=threshold)
     logger.info(f"Average Precision: {avg_precision:.4f}")
     logger.info(f"Average Recall: {avg_recall:.4f}")
     logger.info(f"Average F1 Score: {avg_f1:.4f}")
 
-    # Calculate SSIM Scores
     logger.info("Calculating SSIM Scores...")
     ssim_scores = calculate_ssim_scores(list_gt_images, list_pred_images)
     if ssim_scores:
@@ -490,71 +349,86 @@ def calculate_metrics(
         logger.info(f"Average SSIM Precision: {avg_ssim_precision:.4f}")
         logger.info(f"Average SSIM Recall: {avg_ssim_recall:.4f}")
         if avg_ssim_precision + avg_ssim_recall > 0:
-            f1_score = 2 * avg_ssim_precision * avg_ssim_recall / (avg_ssim_precision + avg_ssim_recall)
+            ssim_f1 = 2 * avg_ssim_precision * avg_ssim_recall / (avg_ssim_precision + avg_ssim_recall)
         else:
-            f1_score = 0.0
-            logger.info(f"F1 Score: {f1_score:.4f}")
+            ssim_f1 = 0.0
+        logger.info(f"Average SSIM F1 Score: {ssim_f1:.4f}")
     else:
-        avg_ssim_precision = 0.0
-        avg_ssim_recall = 0.0
+        avg_ssim_precision = avg_ssim_recall = ssim_f1 = 0.0
         logger.warning("No SSIM scores were calculated.")
 
     metrics = {
-        "Average Temperal Precision": avg_precision,
-        "Average Temperal Recall": avg_recall,
-        "Average Temperal F1 Score": avg_f1,
-
+        "Average Temporal Precision": avg_precision,
+        "Average Temporal Recall": avg_recall,
+        "Average Temporal F1 Score": avg_f1,
         "Average SSIM Precision": avg_ssim_precision,
         "Average SSIM Recall": avg_ssim_recall,
-        "Average SSIM F1 Score": avg_ssim_recall
+        "Average SSIM F1 Score": ssim_f1
     }
-
     return metrics
+
+# -----------------------------------------------------------------------------
+# Argument Parsing and Main Function
+# -----------------------------------------------------------------------------
+def parse_arguments() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Calculate PRF and SSIM metrics from video analysis results."
+    )
+    parser.add_argument('--search_result_path', type=str,
+                        default="results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json",
+                        help='Path to the input JSON file containing video analysis results.')
+    parser.add_argument('--pred_index_key', type=str, default="keyframe_timestamps",
+                        help='the sampled frame index you want to eval')    
+    parser.add_argument('--fps', type=float, default=1.0,
+                        help='Frames per second (FPS) of the raw sampling.')
+    parser.add_argument('--threshold', type=int, default=5,
+                        help='Distance threshold for PRF calculation.')
+    parser.add_argument('--max_workers', type=int, default=4,
+                        help='Maximum number of threads for parallel processing.')
+
+    return parser.parse_args()
 
 
 def main():
-    """
-    Main function to execute metrics calculation.
-    """
+    """Main function to execute metrics calculation."""
     args = parse_arguments()
 
-    # Load JSON data
+    # Load JSON data.
     try:
         result_data = load_json_file(args.search_result_path)
     except Exception as e:
         logger.error(f"Failed to load JSON data: {e}")
         sys.exit(1)
 
-    # Validate JSON structure
-    required_fields = {'video_path', 'keyframe_timestamps', 'gt_frame_index'}
-    for idx, entry in enumerate(result_data):
-        if not required_fields.issubset(entry.keys()):
-            logger.warning(f"Entry {idx} is missing required fields. Skipping.")
-            continue
 
-    # Calculate metrics
+    # Validate JSON structure.
+    required_fields = {'video_path', args.pred_index_key, 'gt_frame_index'}
+    
+    valid_data = [item for item in result_data if required_fields.issubset(item.keys())]
+    if not valid_data:
+        logger.error("No valid entries found in JSON data.")
+        sys.exit(1)
+
+    # Calculate metrics.
     metrics = calculate_metrics(
-        result_data=result_data,
+        result_data=valid_data,
+        pred_index_key=args.pred_index_key,
         fps=args.fps,
         threshold=args.threshold,
-        max_workers=4
+        max_workers=args.max_workers,
     )
 
-    # Save metrics to JSON file
+    # Save metrics to output file.
     output_root = "./results/lvhaystack_score"
     search_result_file_name = os.path.basename(args.search_result_path)
     os.makedirs(output_root, exist_ok=True)
     output_file = os.path.join(
         output_root,
-        search_result_file_name.replace(".json", f"lvhaystack_score.json")
+        search_result_file_name.replace(".json", "lvhaystack_score.json")
     )
-
     save_json_file(metrics, output_file)
-
     logger.info("Metrics calculation completed successfully.")
-
 
 if __name__ == "__main__":
     main()
-
-    #TBD bug on frame index or sec or fps?

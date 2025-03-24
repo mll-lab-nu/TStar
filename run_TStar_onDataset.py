@@ -78,7 +78,7 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
         except Exception as e:
             print(f"Error processing item {idx+1}: {str(e)}")
 
-    return TStar_format_data #[0:10] # [:2] for debug
+    return TStar_format_data[:200] #[0:10] # [:2] for debug
 
 
 

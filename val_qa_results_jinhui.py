@@ -375,7 +375,7 @@ def align2clip(jsondata):
     # load 
         # # Load the dataset from the given source
     dataset_meta: str = "LVHaystack/LongVideoHaystack"
-    split="test_tiny"
+    split="test"
     dataset = load_dataset(dataset_meta) #, download_mode="force_redownload"
     
     # Extract the 'test' split from the dataset
