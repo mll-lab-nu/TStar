@@ -111,7 +111,7 @@ def extract_frames(
 
     else:
         # Uniform sampling
-        sampled_secs = np.linspace(start_sec, end_sec - 1e-6, num_frames, dtype=int)
+        sampled_secs = np.linspace(start_sec, end_sec, num_frames, dtype=int)
 
     # Convert seconds to frame indices
     frame_indices = [int(sec * video_fps / p_fps) for sec in sampled_secs]
@@ -363,7 +363,7 @@ def parse_arguments() -> argparse.Namespace:
     # Data meta processing arguments
     parser.add_argument('--backend', type=str, default="gpt-4o", help='The backend used for question qa.')
     parser.add_argument('--json_file', type=str, default="2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json", help='The video dataset used for processing.')
-    parser.add_argument('--sampling_type', type=str, default="TStar", help='Frame sampling method.')
+    parser.add_argument('--sampling_type', type=str, default="uniform", help='Frame sampling method.')
     parser.add_argument('--num_frame', type=int, default=8, help='The number of frames fed into qa model.')
     parser.add_argument('--duration_type', type=str, default="clip", help='qa on hours video or shorter clip')
     
@@ -375,7 +375,7 @@ def align2clip(jsondata):
     # load 
         # # Load the dataset from the given source
     dataset_meta: str = "LVHaystack/LongVideoHaystack"
-    split="test"
+    split="test_tiny"
     dataset = load_dataset(dataset_meta) #, download_mode="force_redownload"
     
     # Extract the 'test' split from the dataset
