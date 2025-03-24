@@ -1,10 +1,12 @@
 
+./hfd.sh Qwen/Qwen2.5-VL-7B-Instruct
+
 export https_proxy="http://10.120.16.212:20000"; export http_proxy="http://10.120.16.212:20000"; export all_proxy="socks5://10.120.16.212:20000"
 
 export OPENAI_API_KEY=open_ai_key
 export PYTHONPATH=/data/guoweiyu/LV-Haystack:/data/guoweiyu/LV-Haystack/YOLO-World:${PYTHONPATH}
 # gpt-4o as grounder, owl as Searcher
-CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
 python ./run_TStar_onDataset.py \
     --dataset_meta LVHaystack/LongVideoHaystack \
     --split val \

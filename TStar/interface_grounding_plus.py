@@ -43,6 +43,83 @@ class LlavaInterface:
         # In a real scenario, call the Llava model for inference.
         return "Fake Response from LlavaInterface"
 
+from typing import List, Optional
+import torch
+from PIL import Image
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+from qwen_vl_utils import process_vision_info
+
+class QwenInterface:
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen2.5-VL-3B-Instruct",
+        device: str = "cuda"
+    ):
+        """
+        初始化 Qwen 模型和 processor。
+        """
+        self.device = device
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_name, torch_dtype="auto", device_map="auto"
+        )
+        self.processor = AutoProcessor.from_pretrained(model_name)
+
+    def inference(
+        self,
+        query: str,
+        frames: Optional[List[Image.Image]] = None,
+        max_new_tokens: int = 128
+    ) -> str:
+        """
+        统一的推理接口，支持文本和图像混合输入。
+        
+        Args:
+            query: 用户的查询文本，可以包含 <image> 标签。
+            frames: 图像帧列表，与 <image> 标签顺序对应。
+            max_new_tokens: 生成回答时的最大新 token 数量。
+        
+        Returns:
+            模型生成的回答字符串。
+        """
+        # 构建消息列表，按照 <image> 标签将文本和图像交替插入
+        messages = []
+        content_list = []
+        parts = query.split("<image>")
+        for i, part in enumerate(parts):
+            if part.strip():
+                content_list.append({"type": "text", "text": part.strip()})
+            if frames and i < len(frames):
+                # 这里直接传入 PIL Image 对象，processor 会处理图像输入
+                content_list.append({"type": "image", "image": frames[i]})
+        if not content_list:
+            content_list.append({"type": "text", "text": query})
+        messages.append({"role": "user", "content": content_list})
+        
+        # 使用 processor 生成模板文本，并处理视觉信息
+        text_template = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        
+        # 准备输入张量
+        inputs = self.processor(
+            text=[text_template],
+            images=frames,
+            padding=True,
+            return_tensors="pt"
+        )
+        inputs = inputs.to(self.device)
+        
+        # 调用模型生成回答
+        generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+        # 裁剪掉输入部分，保留生成的回答部分
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        output_text = self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+        return output_text[0].strip()
 
 class GPT4Interface:
     def __init__(self, model: str = "gpt-4o", api_key: Optional[str] = None):
@@ -219,84 +296,6 @@ class GPT4Interface:
         except Exception as e:
             return f"Error: {str(e)}"
 
-from typing import List, Optional
-import torch
-from PIL import Image
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
-from qwen_vl_utils import process_vision_info
-
-class QwenInterface:
-    def __init__(
-        self,
-        model_name: str = "Qwen/Qwen2.5-VL-3B-Instruct",
-        device: str = "cuda"
-    ):
-        """
-        初始化 Qwen 模型和 processor。
-        """
-        self.device = device
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            model_name, torch_dtype="auto", device_map="auto"
-        )
-        self.processor = AutoProcessor.from_pretrained(model_name)
-
-    def inference(
-        self,
-        query: str,
-        frames: Optional[List[Image.Image]] = None,
-        max_new_tokens: int = 128
-    ) -> str:
-        """
-        统一的推理接口，支持文本和图像混合输入。
-        
-        Args:
-            query: 用户的查询文本，可以包含 <image> 标签。
-            frames: 图像帧列表，与 <image> 标签顺序对应。
-            max_new_tokens: 生成回答时的最大新 token 数量。
-        
-        Returns:
-            模型生成的回答字符串。
-        """
-        # 构建消息列表，按照 <image> 标签将文本和图像交替插入
-        messages = []
-        content_list = []
-        parts = query.split("<image>")
-        for i, part in enumerate(parts):
-            if part.strip():
-                content_list.append({"type": "text", "text": part.strip()})
-            if frames and i < len(frames):
-                # 这里直接传入 PIL Image 对象，processor 会处理图像输入
-                content_list.append({"type": "image", "image": frames[i]})
-        if not content_list:
-            content_list.append({"type": "text", "text": query})
-        messages.append({"role": "user", "content": content_list})
-        
-        # 使用 processor 生成模板文本，并处理视觉信息
-        text_template = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        image_inputs, video_inputs = process_vision_info(messages)
-        
-        # 准备输入张量
-        inputs = self.processor(
-            text=[text_template],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt"
-        )
-        inputs = inputs.to(self.device)
-        
-        # 调用模型生成回答
-        generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
-        # 裁剪掉输入部分，保留生成的回答部分
-        generated_ids_trimmed = [
-            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        output_text = self.processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-        return output_text[0].strip()
 
 class TStarUniversalGrounder:
     """
@@ -441,11 +440,9 @@ class TStarUniversalGrounder:
 
 if __name__ == "__main__":
     # Test example.
-    frames_fake = [
-        Image.open("./output_image.jpg"),
-        Image.open("./output_image.jpg")
-    ]
-  
+
+    qwen = QwenInterface(model_name="./pretrained/Qwen2.5-VL-3B-Instruct")
+    frames_fake = None
     print("\n=== Using GPT-4 backend ===")
     gpt4_grounder = TStarUniversalGrounder(
         model_name="gpt-4o",
