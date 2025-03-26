@@ -60,6 +60,9 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
                     options += f"{key}) {value}\n"
                 options = options.rstrip('\n')  # Remove the trailing newline
 
+            video_metadata = item["video_metadata"]
+            vclip_interval_in_video = video_metadata["vclip_interval_in_video"]
+        
             # Construct the transformed dictionary for the entry
             transformed_item = {
                 "video_id": video_id,
@@ -68,6 +71,7 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
                 "options": options,
                 "gt_answer": gt_answer,
                 "gt_frame_index": gt_frame_index,
+                "vclip_interval_in_video": vclip_interval_in_video
             }
 
             # Add the transformed entry to the result list
@@ -169,7 +173,7 @@ def main():
     parser.add_argument('--grid_cols', type=int, default=4, help='Number of columns in the image grid.')
     parser.add_argument('--confidence_threshold', type=float, default=0.7, help='YOLO detection confidence threshold.')
     parser.add_argument('--search_budget', type=float, default=1.0, help='Maximum ratio of frames to process during search.')
-    parser.add_argument('--output_dir', type=str, default='./output', help='Directory to save outputs.')
+    parser.add_argument('--output_dir', type=str, default='./results/frame_search', help='Directory to save outputs.')
 
     args = parser.parse_args()
 

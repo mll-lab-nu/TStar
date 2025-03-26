@@ -282,7 +282,7 @@ def extract_metrics_data(result_data: List[Dict[str, Any]]) -> Tuple[List[str], 
     return video_paths, searching_sec, gt_seconds
 
 def calculate_metrics(result_data: List[Dict[str, Any]], 
-                      pred_index_key="keyframe_timestamps",
+                      frame_index_key="keyframe_timestamps",
                       fps: float = 30, threshold: int = 5,
                       max_workers: int = 4) -> Dict[str, Any]:
     """
@@ -324,7 +324,7 @@ def calculate_metrics(result_data: List[Dict[str, Any]],
 
                 item = result_data[idx]
                 gt_num = len(item['gt_frame_index'])
-                pred_num = len(item[pred_index_key])
+                pred_num = len(item[frame_index_key])
                 gt_images = frames[:gt_num]
                 pred_images = frames[gt_num:gt_num + pred_num]
 
@@ -378,7 +378,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument('--search_result_path', type=str,
                         default="results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json",
                         help='Path to the input JSON file containing video analysis results.')
-    parser.add_argument('--pred_index_key', type=str, default="keyframe_timestamps",
+    parser.add_argument('--frame_index_key', type=str, default="keyframe_timestamps",
                         help='the sampled frame index you want to eval')    
     parser.add_argument('--fps', type=float, default=1.0,
                         help='Frames per second (FPS) of the raw sampling.')
@@ -403,7 +403,7 @@ def main():
 
 
     # Validate JSON structure.
-    required_fields = {'video_path', args.pred_index_key, 'gt_frame_index'}
+    required_fields = {'video_path', args.frame_index_key, 'gt_frame_index'}
     
     valid_data = [item for item in result_data if required_fields.issubset(item.keys())]
     if not valid_data:
@@ -413,7 +413,7 @@ def main():
     # Calculate metrics.
     metrics = calculate_metrics(
         result_data=valid_data,
-        pred_index_key=args.pred_index_key,
+        frame_index_key=args.frame_index_key,
         fps=args.fps,
         threshold=args.threshold,
         max_workers=args.max_workers,

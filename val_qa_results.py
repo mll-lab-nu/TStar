@@ -6,7 +6,6 @@ from typing import List, Dict, Any, Optional, Tuple
 import cv2
 import numpy as np
 from PIL import Image
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 from TStar.interface_grounding import TStarUniversalGrounder
@@ -44,6 +43,7 @@ def load_video_fps(video_path: str) -> float:
         raise ValueError(f"Unable to retrieve FPS for video: {video_path}")
     logger.debug(f"Video {video_path} FPS: {fps}")
     return fps
+
 
 def extract_frames(
     video_path: str,
@@ -85,7 +85,6 @@ def extract_frames(
     # Clamp within bounds
     start_sec = max(0, start_sec)
     end_sec = min(video_duration_sec, end_sec)
-    clip_secs = int(end_sec - start_sec)
 
     # --- Sampling strategy ---
     if frame_distribution is not None:
@@ -155,20 +154,18 @@ def match_answer(predicted: str, ground_truth: str) -> bool:
 def _submit_item_task(item: Dict[str, Any],
                       nframes: int,
                       sampling_type: str,
-                      p_fps: int =1) -> Tuple[str, Dict[str, Any]]:
+                      p_fps: int = 1) -> Tuple[str, Dict[str, Any]]:
     """
     Prepare frame extraction parameters for a single item.
 
     Args:
         item: Data dictionary for one item.
-        fps_cache: A cache for video FPS values.
-        sampling_type: Frame sampling method key (e.g., "uniform" or "keyframe_timestamps").
+        sampling_type: Frame sampling method key (e.g., "uniform" or "TStar").
 
     Returns:
         Tuple containing the video path and a task info dictionary.
     """
     video_path = item['video_path']
-    # keyframe_timestamps = item.get("keyframe_timestamps", [])
     
     if sampling_type == "uniform":
         keyframe_distribution = None
@@ -182,89 +179,22 @@ def _submit_item_task(item: Dict[str, Any],
     return video_path, {"item": item, "num_frames": nframes, "keyframe_distribution": keyframe_distribution, "p_fps": p_fps}
 
 
-def _process_future_result(future,
-                           qa_results: List[Dict[str, Any]],
-                           tstar_grounder: TStarUniversalGrounder,
-                           result_data: List[Dict[str, Any]],
-                           sampling_type: str,
-                           count: Dict[str, int]) -> None:
-    """
-    Process the result of a completed future task:
-    extract frames, perform QA inference, and update qa_results.
-
-    Args:
-        future: The future task.
-        qa_results: List of QA results.
-        tstar_grounder: The QA inference model.
-        result_data: The original data list.
-        sampling_type: Key indicating the frame sampling method.
-        count: Dictionary to update total and correct counts.
-    """
-    qa_idx = future.qa_idx  # Attribute attached to the future
-    try:
-        frames = future.result()
-    except Exception as e:
-        logger.error(f"Error extracting frames for item {qa_idx}: {e}")
-        qa_results[qa_idx][f"{sampling_type}_pred_answer"] = "Frame extraction failed."
-        qa_results[qa_idx]["correct"] = False
-        return
-
-    if not frames or len(frames) < 1:
-        logger.warning(f"No frames extracted for item {qa_idx}.")
-        return
-
-    gt_image = frames[0]
-    pred_images = frames[1:]
-    if gt_image is None:
-        logger.warning(f"GT frame extraction failed for item {qa_idx}.")
-        qa_results[qa_idx]["pred_answer"] = "GT frame extraction failed."
-        qa_results[qa_idx]["correct"] = False
-        return
-
-    try:
-        pred_answer = tstar_grounder.inference_qa(
-            frames=pred_images,
-            question=result_data[qa_idx]['question'],
-            options=result_data[qa_idx]['options'],
-            temperature=0.2,
-            max_tokens=1024
-        )
-        logger.info(f"Item {qa_idx} QA answer: {pred_answer}, GT answer: {result_data[qa_idx]['gt_answer']}")
-
-        gt_answer = qa_results[qa_idx]["gt_answer"].strip()
-        pred_answer = pred_answer.strip()
-        is_correct = match_answer(predicted=pred_answer, ground_truth=gt_answer)
-
-        qa_results[qa_idx][f"{sampling_type}_pred_answer"] = pred_answer
-        qa_results[qa_idx]["correct"] = is_correct
-
-        if is_correct:
-            count["correct"] += 1
-        count["total"] += 1
-    except Exception as e:
-        logger.error(f"QA inference failed for item {qa_idx}: {e}")
-        qa_results[qa_idx][f"{sampling_type}_pred_answer"] = "QA inference failed."
-        qa_results[qa_idx]["correct"] = False
-
-
 def compute_qa_accuracy(result_data: List[Dict[str, Any]],
-                        tstar_grounder: TStarUniversalGrounder,
-                        nframe=8,
+                        vlm_model: TStarUniversalGrounder,
+                        nframe: int = 8,
                         sampling_type: str = "uniform",
                         duration_type: str = "video",
-                        max_workers: int = 4,
                         output_file: str = "./Rebuttal.json") -> Tuple[float, List[Dict[str, Any]]]:
     """
-    Compute the QA accuracy by processing each item in the result_data.
+    Compute the QA accuracy by processing each item in result_data sequentially.
     
     If the output file exists, load existing results and skip already processed items.
     All results, including previously processed ones, are included in the accuracy calculation.
 
     Args:
         result_data: List of data items.
-        tstar_grounder: The QA inference model.
-        sampling_type: Key for frame sampling (e.g., "uniform" or "keyframe_timestamps").
-        max_workers: Maximum number of threads to use.
+        vlm_model: The QA inference model.
+        sampling_type: Key for frame sampling (e.g., "uniform" or "TStar").
         output_file: Path to the JSONL file for saving results.
 
     Returns:
@@ -282,12 +212,13 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
 
     qa_results = []
     count = {"correct": 0, "total": 0}
-    fps_cache = {}
-    futures = []
 
+    # Create a tqdm progress bar over the result data
+    pbar = tqdm(result_data, desc="Processing samples", total=len(result_data))
+    
     # Open output file for appending new results
-    with open(output_file, "a", encoding="utf-8") as jsonl_file, ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for idx, item in enumerate(result_data):
+    with open(output_file, "a", encoding="utf-8") as jsonl_file:
+        for idx, item in enumerate(pbar):
             video_path = item.get('video_path')
             # Step 2: Skip already processed items and update statistics
             if video_path in existing_results:
@@ -296,49 +227,66 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
                 if processed_item.get("correct"):
                     count["correct"] += 1
                 count["total"] += 1
+                pbar.set_postfix(acc=f"{(count['correct']/count['total']*100):.2f}%" if count["total"] > 0 else "0%")
                 continue
 
             # Submit task for items that have not been processed
             try:
                 video_path, task_info = _submit_item_task(item, nframes=nframe, sampling_type=sampling_type)
-                future = executor.submit(
-                    extract_frames, video_path,
+            except Exception as e:
+                logger.error(f"Error preparing item {idx}: {e}")
+                continue
+
+            # Sequentially process the item
+            try:
+                frames = extract_frames(
+                    video_path,
                     item,
                     task_info["keyframe_distribution"],
                     task_info["num_frames"],
                     task_info["p_fps"],
                     duration_type=duration_type
                 )
-                future.qa_idx = idx  # Attach index to future
-                # Initialize QA result fields
-                item[f"{sampling_type}_pred_answer"] = None
-                item["correct"] = None
+            except Exception as e:
+                logger.error(f"Error extracting frames for item {idx}: {e}")
+                item[f"{sampling_type}_pred_answer"] = "Frame extraction failed."
+                item["correct"] = False
                 qa_results.append(item)
-                futures.append(future)
-            except KeyError as e:
-                logger.error(f"Item {idx} is missing key: {e}. Skipping.")
-                continue
-            except Exception as e:
-                logger.error(f"Error processing item {idx}: {e}. Skipping.")
+                json.dump(item, jsonl_file, ensure_ascii=False)
+                jsonl_file.write("\n")
+                pbar.set_postfix(acc=f"{(count['correct']/count['total']*100):.2f}%" if count["total"] > 0 else "0%")
                 continue
 
-        # Step 3: Process submitted tasks
-        for future in tqdm(as_completed(futures), total=len(futures),
-                           desc="Extracting frames and performing QA"):
-            qa_idx = getattr(future, "qa_idx", None)
-            if qa_idx is None:
-                continue
             try:
-                _process_future_result(future, qa_results, tstar_grounder,
-                                       result_data, sampling_type, count)
-            except Exception as e:
-                logger.error(f"Error processing future for item {qa_idx}: {e}")
-                qa_results[qa_idx][f"{sampling_type}_pred_answer"] = "Processing failed."
-                qa_results[qa_idx]["correct"] = False
+                pred_answer = vlm_model.inference_qa(
+                    frames=frames,
+                    question=item['question'],
+                    options=item['options'],
+                    temperature=0.2,
+                    max_tokens=1024
+                )
+                logger.info(f"Item {idx} QA answer: {pred_answer}, GT answer: {item['gt_answer']}")
 
+                gt_answer = item["gt_answer"].strip()
+                pred_answer = pred_answer.strip()
+                is_correct = match_answer(predicted=pred_answer, ground_truth=gt_answer)
+
+                item[f"{sampling_type}_pred_answer"] = pred_answer
+                item["correct"] = is_correct
+
+                if is_correct:
+                    count["correct"] += 1
+                count["total"] += 1
+            except Exception as e:
+                logger.error(f"QA inference failed for item {idx}: {e}")
+                item[f"{sampling_type}_pred_answer"] = "QA inference failed."
+                item["correct"] = False
+
+            qa_results.append(item)
             # Write new result to file
-            json.dump(qa_results[qa_idx], jsonl_file, ensure_ascii=False)
+            json.dump(item, jsonl_file, ensure_ascii=False)
             jsonl_file.write("\n")
+            pbar.set_postfix(acc=f"{(count['correct']/count['total']*100):.2f}%" if count["total"] > 0 else "0%")
 
     # Step 4: Calculate overall accuracy
     if count["total"] == 0:
@@ -347,8 +295,7 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
     else:
         accuracy = count["correct"] / count["total"]
 
-    logger.info(f"QA Accuracy: {accuracy * 100:.2f}% "
-                f"({count['correct']}/{count['total']})")
+    logger.info(f"QA Accuracy: {accuracy * 100:.2f}% ({count['correct']}/{count['total']})")
     return accuracy, qa_results
 
 
@@ -359,54 +306,13 @@ def parse_arguments() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="TStarSearcher: Video Frame Search and QA Tool")
-
-    # Data meta processing arguments
-    parser.add_argument('--backend', type=str, default="gpt-4o", help='The backend used for question qa.')
-    parser.add_argument('--json_file', type=str, default="2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json", help='The video dataset used for processing.')
+    parser.add_argument('--backend', type=str, default="./pretrained/Qwen2.5-VL-7B-Instruct", help='The backend used for QA. quick start by [gpt4o, Qwen/Qwen2.5-VL-7B-Instruct]')
+    parser.add_argument('--json_file', type=str, default="2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json",
+                        help='The video dataset used for processing.')
     parser.add_argument('--sampling_type', type=str, default="uniform", help='Frame sampling method.')
-    parser.add_argument('--num_frame', type=int, default=8, help='The number of frames fed into qa model.')
-    parser.add_argument('--duration_type', type=str, default="clip", help='qa on hours video or shorter clip')
-    
+    parser.add_argument('--num_frame', type=int, default=8, help='The number of frames fed into QA model.')
+    parser.add_argument('--duration_type', type=str, default="video", help='QA on full video or shorter clip.')
     return parser.parse_args()
-
-from datasets import load_dataset
-
-def align2clip(jsondata):
-    # load 
-        # # Load the dataset from the given source
-    dataset_meta: str = "LVHaystack/LongVideoHaystack"
-    split="test"
-    dataset = load_dataset(dataset_meta) #, download_mode="force_redownload"
-    
-    # Extract the 'test' split from the dataset
-    LVHaystact_testset = dataset[split]
-
-    # # List to hold the transformed data
-    TStar_format_data = []
-
-    # Iterate over each row in the dataset
-    # build dict
-    video_question2clip = {}
-    for idx, item in enumerate(LVHaystact_testset):
-        video_id = item["video_id"]
-        question =  item["question"]  
-        video_metadata = item["video_metadata"]     
-        vclip_interval_in_video = video_metadata["vclip_interval_in_video"]
-        id = f"{video_id}_{question}"
-        video_question2clip[id] = vclip_interval_in_video
-        pass
-
-    for idx, item in enumerate(jsondata):
-
-        video_id = item["video_id"]
-        question =  item["question"]
-        id = f"{video_id}_{question}"
-        item["vclip_interval_in_video"] = video_question2clip[id]
-    
-    return jsondata
-
-
-
 
 if __name__ == "__main__":
     np.random.seed(2025)
@@ -416,28 +322,27 @@ if __name__ == "__main__":
     tstar_grounder = TStarUniversalGrounder(model_name=args.backend)
 
     # Load result_data from the JSON file
-    frame_search_root = "./results/frame_search"
-    data_json_path = os.path.join(frame_search_root, args.json_file)
+    # frame_search_root = "./results/frame_search"
+    data_json_path = args.json_file
     with open(data_json_path, "r", encoding="utf-8") as f:
-        result_data = json.load(f)[:300]
-
-    result_data = align2clip(result_data)
+        result_data = json.load(f)
 
     output_root = "./results/last_version"
     os.makedirs(output_root, exist_ok=True)
+    backend_name = args.backend.replace("/", "_")
     output_file = os.path.join(
         output_root,
-        args.json_file.replace(".json", f"qa_{args.num_frame}frames_{args.backend}_{args.duration_type}_{args.sampling_type}.json")
+        args.json_file.replace(".json", f"qa_{args.num_frame}frames_{backend_name}_{args.duration_type}_{args.sampling_type}.json")
     )
 
-    # Compute QA accuracy and write results
+    # Compute QA accuracy and write results sequentially
     accuracy, qa_results = compute_qa_accuracy(
         result_data=result_data,
-        tstar_grounder=tstar_grounder,
+        vlm_model=tstar_grounder,
+        nframe=args.num_frame,
         sampling_type=args.sampling_type,
-        max_workers=1,
-        output_file=output_file,
         duration_type=args.duration_type,
+        output_file=output_file
     )
 
     print(f"QA Accuracy: {accuracy * 100:.2f}%")

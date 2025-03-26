@@ -1,6 +1,6 @@
 # TStar: A Unified KeyFrame Searching Framework for Video Question Answering
 
-**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision and GPT-4o to understand and reason over video data.
+**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision, QWen-VL and GPT-4o to understand and reason over video data.
 
 ## Features
 - **Iteratively Searching**: Iteratively identifies and focuses on the most relevant visual information in videos based on the question being asked.
@@ -28,13 +28,13 @@ LV-Haystack/
 ├── LLaVA-NeXT/                # Query grounding and QA interface (e.g., LLaVA or GPT-4 API)
 ├── YOLO-World/                # Object detection model with open vocabulary
 ├── TStar/                     # Core Python module for T* keyframe search 
-│   ├── interface_llm.py       # Interface for grounding questions with VLMs
-│   ├── interface_yolo.py      # Function for scoring images using YOLO
+│   ├── interface_grounding.py       # Interface for grounding questions with VLMs
+│   ├── interface_heuristic.py      # Function for scoring images using YOLO
 │   ├── interface_searcher.py  # Logic for searching keyframes in T*
 │   ├── TStarFramework.py      # Example class integrating T* searching with QA
-├── HaystackBench              # Scripts for inference on the LV-Haystack dataset
+├── LVHaystackBench              # Scripts for inference on the LV-Haystack dataset
 │   ├── run_TStar_onDataset.py # Run keyframe search on a given dataset (e.g., LongVideoBench)
-│   ├── val_kfs_results.py     # Evaluate keyframe search results on LV-Haystack
+│   ├── val_tstar_results.py     # Evaluate keyframe search results on LV-Haystack
 │   ├── val_qa_results.py      # Evaluate video question answering with searched keyframes
 ├── README.md                  # Documentation for the repository
 
@@ -49,17 +49,12 @@ The example below demonstrates how to perform video question answering with keyf
 export OPENAI_API_KEY=your_openai_api_key
 
 python run_TStar_Demo_onVideo.py \
-    --video_path /path/to/LV-Haystack/38737402-19bd-4689-9e74-3af391b15feb.mp4 \
+    --video_path /path/to/LVHaystack/38737402-19bd-4689-9e74-3af391b15feb.mp4 \
     --question "What is the color of the couch?" \
-    --options "A) Red, B) Blue, C) Green, D) Yellow" \
-    --yolo_config_path ./YOLOWorld/configs/yolo_config.py \
-    --yolo_checkpoint_path ./pretrained/yolo_checkpoint.pth \
-    --search_nframes 8 \
-    --image_grid_shape 8 8 \
-    --confidence_threshold 0.6 \
-    --device cuda:0
+    --options "A) Red, B) Blue, C) Green, D) Yellow"     --grounder gpt-4o \
+    --heuristic owl-vit \
+    --search_nframes 8
 ```
-
 
 ## Test on LV-HayStack
 To evaluate T* on a dataset (e.g., LV-Haystack), use the following command:
@@ -108,17 +103,14 @@ Once your dataset is prepared, you can run TStar to perform keyframe searching. 
   <summary>Click to expand python script!</summary>
   
 ```python
-python HaystackBench/run_TStar_onDataset.py \
-    --input_json path_to_your_annotations.json \
-    --output_json path_to_your_annotations_Tstar_frames.json \
-    --video_dir ./Data/Haystack-Bench/videos \
-    --yolo_config_path ./YOLOWorld/configs/pretrain/yolo_world_v2_xl_vlpan_bn.py \
-    --yolo_checkpoint_path ./pretrained/yolo_checkpoint.pth \
-    --search_nframes 8 \
-    --image_grid_shape 8 8 \
-    --confidence_threshold 0.5 \
-    --device cuda:0
-
+python ./run_TStar_onDataset.py \
+    --dataset_meta LVHaystack/LongVideoHaystack \
+    --split test_tiny \
+    --video_root ./Datasets/ego4d_data/ego4d_data/v1/256p \
+    --output_json_name TStar_LVHaystack_tiny.json \
+    --grounder gpt-4o \
+    --heuristic owl-vit \
+    --search_nframes 8
 # new you have add predict frame index in your annotations json
 # and sampine frame with the T* prediction for your works!
 
