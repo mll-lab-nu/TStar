@@ -55,7 +55,7 @@ def select_top_n_keyframes(item, nframes=8):
     
     # 根据 top_indices 选取对应的 timestamps
     top_timestamps = [i for i in top_indices]
-    return top_timestamps
+    return top_timestamps.tolist()
 def sample_n_keyframe_indices(item, nframes=8, replace=False):
     """
     根据 score_distribution 的概率分布采样索引（不使用 keyframe_timestamps）。
@@ -79,7 +79,7 @@ def sample_n_keyframe_indices(item, nframes=8, replace=False):
     sampled_indices = np.random.choice(len(prob_dist), size=nframes, replace=replace, p=prob_dist)
     return sampled_indices.tolist()
 
-def process_json_file(input_json, nframe=8, mode="top"):
+def process_json_file(input_json, nframe=8, mode="sample"):
     """
     处理 JSON 文件，为每个条目添加 top 或 sample 的 keyframe 索引字段，并保存回原文件。
     
@@ -101,7 +101,7 @@ def process_json_file(input_json, nframe=8, mode="top"):
             new_keyframes = sample_n_keyframe_indices(item, nframes=nframe)
         else:
             raise ValueError(f"Unknown mode: {mode}. Use 'top' or 'sample'.")
-
+        new_keyframes.sort()
         item[f"{nframe}keyframe_indices"] = new_keyframes
 
     # 写回原始文件
@@ -110,3 +110,9 @@ def process_json_file(input_json, nframe=8, mode="top"):
 
     return data
 
+
+if __name__ == "__main__":
+    input_json = "/data/guoweiyu/LV-Haystack/results/frame_search/TStar_LongVideoHaystack_tiny.json"
+    
+    process_json_file(input_json=input_json, nframe=32, mode="sample")
+    pass

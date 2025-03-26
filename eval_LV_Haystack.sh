@@ -6,7 +6,7 @@ export https_proxy="http://10.120.16.212:20000"; export http_proxy="http://10.12
 export OPENAI_API_KEY=open_ai_key
 export PYTHONPATH=/data/guoweiyu/LV-Haystack:/data/guoweiyu/LV-Haystack/YOLO-World:${PYTHONPATH}
 # gpt-4o as grounder, owl as Searcher
-export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5
 python ./run_TStar_onDataset.py \
     --dataset_meta LVHaystack/LongVideoHaystack \
     --split val \
@@ -51,5 +51,17 @@ python val_tstar_results.py \
     --search_result_path results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json \
     --pred_index_key 32keyframe_indices 
 
+
+
+
+
+export https_proxy="http://10.120.16.212:20000"; export http_proxy="http://10.120.16.212:20000"; export all_proxy="socks5://10.120.16.212:20000"
+
+export OPENAI_API_KEY=open_ai_key
+export PYTHONPATH=/data/guoweiyu/LV-Haystack:/data/guoweiyu/LV-Haystack/YOLO-World:${PYTHONPATH}
+# gpt-4o as grounder, owl as Searcher
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5
+
+python /data/guoweiyu/LV-Haystack/TStar/script/test_qwen2.py
 
 
