@@ -116,3 +116,21 @@ python ./run_TStar_onDataset.py \
 
 ```
 </details>
+
+### Contact
+- Jinhui Ye: jinhuiyes@gmail.com
+- Zihan Wang: zihanw@u.northwestern.edu
+- Haosen Sun: haosensun2026@u.northwestern.edu
+- Keshigeyan Chandrasegaran: keshik@stanford.edu
+- Anabella Aisaro: anabellaisaro2025@u.northwestern.edu
+- Manling Li: manling.li@northwestern.edu
+
+### Citation
+@misc{tstar,
+      title={Re-thinking Temporal Search for Long-Form Video Understanding}, 
+      author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
+      year={2025},
+      eprint={2503.TODO},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
