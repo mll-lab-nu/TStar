@@ -15,10 +15,11 @@
 ```bash
 ## Follow docs/installation to implemet Grounding (e.g., LLaVA) and Searching (e.g., YOLO) Function
 ###  Install Query Grounder Interface(LLaVA or GPT-API) 
-### Optional if you test with GPT4o
+### Optional if you test with GPT4o or QWen
 git clone https://github.com/LLaVA-VL/LLaVA-NeXT  
 
-### Install Image Grid Scorer Interface e.g., YOLO-WORLD
+### Install Image Scorer Interface e.g., YOLO-WORLD 
+### Optional if you test with owl-vit (fast run but lower performance))
 git clone --recursive https://github.com/AILab-CVC/YOLO-World.git
 ```
 
@@ -63,6 +64,9 @@ To evaluate T* on a dataset (e.g., LV-Haystack), use the following command:
 bash ./eval_LV_Haystack.sh
 ```
 </details>
+
+📁 **Checkpoints**: Here are the intermediate JSON files generated from the latest version, in case others’d like to quickly check our T* outputs.
+[LV-Haystack Tiny (Google Drive)](https://drive.google.com/drive/folders/1ig0XtZqGFYwERkARxCQMqIyKQjrtxcrx?usp=sharing)
 
 ### Running T* on Your Dataset
 
@@ -126,11 +130,15 @@ python ./run_TStar_onDataset.py \
 - Manling Li: manling.li@northwestern.edu
 
 # Citation
+If you find **TStar** helpful, please consider citing us:
+
+```bibtex
 @misc{tstar,
-      title={Re-thinking Temporal Search for Long-Form Video Understanding}, 
-      author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
-      year={2025},
-      eprint={2503.TODO},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+  title={Re-thinking Temporal Search for Long-Form Video Understanding}, 
+  author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
+  year={2025},
+  eprint={2503.TODO},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG}
 }
+```
