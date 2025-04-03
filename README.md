@@ -25,8 +25,8 @@ git clone --recursive https://github.com/AILab-CVC/YOLO-World.git
 ### Structure:
 ```bash
 LV-Haystack/
-├── LLaVA-NeXT/                # Query grounding and QA interface (e.g., LLaVA or GPT-4 API)
-├── YOLO-World/                # Object detection model with open vocabulary
+├── LLaVA-NeXT/                # Query grounding and QA interface (e.g., LLaVA or GPT-4 API, or QWen from HF)
+├── YOLO-World/                # Object detection model with open vocabulary (optional)
 ├── TStar/                     # Core Python module for T* keyframe search 
 │   ├── interface_grounding.py       # Interface for grounding questions with VLMs
 │   ├── interface_heuristic.py      # Function for scoring images using YOLO

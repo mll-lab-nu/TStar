@@ -32,3 +32,16 @@ pretrained
 eval_LV_Haystack.sh
 
 results/*
+7B.sh
+
+eval_LV_Haystack_test_Tstar.sh
+.gitignore
+.vscode/launch.json
+eval_LV_Haystack_test.sh
+
+val_qa_results_test.py
+.vscode/launch.json
+results_bar/*
+results_bar
+TStar/replacements.txt
+replacements.txt

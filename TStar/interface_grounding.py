@@ -58,10 +58,11 @@ class QwenInterface:
         """
         Initialize Qwen model and processor.
         """
-        self.device = device
+        
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            model_name, torch_dtype="auto", device_map=self.device
+            model_name, torch_dtype="auto", device_map="auto"
         )
+        self.device = self.model.device
         self.processor = AutoProcessor.from_pretrained(model_name)
 
     def inference_with_frames(
@@ -344,7 +345,7 @@ class TStarUniversalGrounder:
             self.VLM_model_interface = LlavaInterface(model_path=model_path, model_base=model_base)
         elif "qwen" in self.backend:
             # Initialize QwenInterface if 'qwen' is specified in the backend.
-            self.VLM_model_interface = QwenInterface(model_name=model_name, device="cuda")
+            self.VLM_model_interface = QwenInterface(model_name=model_name, device="auto")
         elif "gpt" in self.backend:
             self.VLM_model_interface = GPT4Interface(model=model_name, api_key=gpt4_api_key)
         else:

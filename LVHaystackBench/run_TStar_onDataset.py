@@ -46,7 +46,7 @@ def LVHaystack2TStarFormat(dataset_meta: str = "LVHaystack/LongVideoHaystack",
             gt_answer = item.get("answer")
 
             options_dict = item.get("options", "")
-            gt_frame_index = item.get("frame_indexes", []) #gt frame index for quetion
+            gt_frame_index = item.get("frame_indexes_video", []) #gt frame index for quetion
 
             # Validate required fields
             if not video_id or not question:

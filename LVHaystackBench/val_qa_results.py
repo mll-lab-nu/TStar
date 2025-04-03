@@ -92,7 +92,7 @@ def extract_frames(
         if dist.sum() == 0:
             dist = np.ones_like(dist)
 
-        # Clip-aware slicing
+        # Slice distribution based on clip interval
         clip_start_idx = int(start_sec)
         clip_end_idx = int(end_sec)
         dist_clip = dist[clip_start_idx:clip_end_idx]
@@ -102,12 +102,12 @@ def extract_frames(
 
         dist_clip /= dist_clip.sum()
 
-        sampled_secs_in_clip = np.random.choice(
-            len(dist_clip), size=num_frames, replace=False, p=dist_clip
-        )
+        # Select top-k indices based on probabilities
+        topk_idx = np.argsort(-dist_clip)[:num_frames]
+        # Ensure temporal order
+        sampled_secs_in_clip = np.sort(topk_idx)
         sampled_secs = sampled_secs_in_clip + clip_start_idx
         sampled_secs.sort()
-
     else:
         # Uniform sampling
         sampled_secs = np.linspace(start_sec, end_sec, num_frames, dtype=int)
@@ -152,7 +152,7 @@ def match_answer(predicted: str, ground_truth: str) -> bool:
 
 
 def _submit_item_task(item: Dict[str, Any],
-                      nframes: int,
+                      nframe: int,
                       sampling_type: str,
                       p_fps: int = 1) -> Tuple[str, Dict[str, Any]]:
     """
@@ -176,7 +176,7 @@ def _submit_item_task(item: Dict[str, Any],
     # Initialize QA result fields
     item[f"{sampling_type}_pred_answer"] = None
     item["correct"] = None
-    return video_path, {"item": item, "num_frames": nframes, "keyframe_distribution": keyframe_distribution, "p_fps": p_fps}
+    return video_path, {"item": item, "num_frames": nframe, "keyframe_distribution": keyframe_distribution, "p_fps": p_fps}
 
 
 def compute_qa_accuracy(result_data: List[Dict[str, Any]],
@@ -200,7 +200,7 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
     Returns:
         Tuple containing the accuracy and the list of QA results.
     """
-    # Step 1: Load existing results from output_file
+    # Load existing results from output_file if it exists
     existing_results = {}
     if os.path.exists(output_file):
         logger.info(f"Output file {output_file} already exists. Loading previous results.")
@@ -220,7 +220,7 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
     with open(output_file, "a", encoding="utf-8") as jsonl_file:
         for idx, item in enumerate(pbar):
             video_path = item.get('video_path')
-            # Step 2: Skip already processed items and update statistics
+            # Skip already processed items and update statistics
             if video_path in existing_results:
                 processed_item = existing_results[video_path]
                 qa_results.append(processed_item)
@@ -232,7 +232,7 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
 
             # Submit task for items that have not been processed
             try:
-                video_path, task_info = _submit_item_task(item, nframes=nframe, sampling_type=sampling_type)
+                video_path, task_info = _submit_item_task(item, nframe=nframe, sampling_type=sampling_type)
             except Exception as e:
                 logger.error(f"Error preparing item {idx}: {e}")
                 continue
@@ -288,7 +288,7 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
             jsonl_file.write("\n")
             pbar.set_postfix(acc=f"{(count['correct']/count['total']*100):.2f}%" if count["total"] > 0 else "0%")
 
-    # Step 4: Calculate overall accuracy
+    # Calculate overall accuracy
     if count["total"] == 0:
         logger.warning("No QA evaluations were performed.")
         accuracy = 0.0
@@ -302,11 +302,12 @@ def compute_qa_accuracy(result_data: List[Dict[str, Any]],
 def parse_arguments() -> argparse.Namespace:
     """
     Parse command-line arguments.
+
     Returns:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser(description="TStarSearcher: Video Frame Search and QA Tool")
-    parser.add_argument('--backend', type=str, default="./pretrained/Qwen2.5-VL-7B-Instruct", help='The backend used for QA. quick start by [gpt4o, Qwen/Qwen2.5-VL-7B-Instruct]')
+    parser.add_argument('--backend', type=str, default="./pretrained/Qwen2.5-VL-7B-Instruct", help='The backend used for QA. Quick start by [gpt4o, Qwen/Qwen2.5-VL-7B-Instruct]')
     parser.add_argument('--json_file', type=str, default="2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json",
                         help='The video dataset used for processing.')
     parser.add_argument('--sampling_type', type=str, default="uniform", help='Frame sampling method.')
@@ -321,18 +322,20 @@ if __name__ == "__main__":
     # Initialize TStarUniversalGrounder
     tstar_grounder = TStarUniversalGrounder(model_name=args.backend)
 
-    # Load result_data from the JSON file
-    # frame_search_root = "./results/frame_search"
+    # Load result_data from the JSON file and align clip intervals
     data_json_path = args.json_file
     with open(data_json_path, "r", encoding="utf-8") as f:
         result_data = json.load(f)
 
-    output_root = "./results/last_version"
+
+    output_root = "./results/qa_version"
     os.makedirs(output_root, exist_ok=True)
+    # Assume args.json_file is a file path like "path/to/your_file.json"
+    file_name = os.path.basename(args.json_file)
     backend_name = args.backend.replace("/", "_")
     output_file = os.path.join(
         output_root,
-        args.json_file.replace(".json", f"qa_{args.num_frame}frames_{backend_name}_{args.duration_type}_{args.sampling_type}.json")
+        file_name.replace(".json", f"qa_{args.num_frame}frames_{backend_name}_{args.duration_type}_{args.sampling_type}.json")
     )
 
     # Compute QA accuracy and write results sequentially
@@ -347,3 +350,23 @@ if __name__ == "__main__":
 
     print(f"QA Accuracy: {accuracy * 100:.2f}%")
     print(f"Results saved to {output_file}")
+
+    from pathlib import Path
+
+    # Original results save path
+    qa_result_path = Path(output_file)
+
+    # Save accuracy to a JSON file
+    metrics = {
+        "qa_accuracy": accuracy
+    }
+
+    # Construct a new filename, e.g., results.json => results_metrics.json
+    metrics_output_file = qa_result_path.with_stem(qa_result_path.stem + "_metrics")
+    metrics_output_file = metrics_output_file.with_suffix(".json")
+
+    # Write the JSON file
+    with open(metrics_output_file, "w") as f:
+        json.dump(metrics, f, indent=2)
+
+    print(f"Metrics saved to {metrics_output_file}")

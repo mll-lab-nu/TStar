@@ -21,7 +21,7 @@
 #   --grounder: The model backend used for QA (here, "gpt-4o").
 #   --heuristic: The heuristic used (e.g., "yolo-World").
 #   --search_nframes: Number of frames to use for search (here, 8).
-python ./run_TStar_onDataset.py \
+python ./LVHaystackBench/run_TStar_onDataset.py \
     --dataset_meta LVHaystack/LongVideoHaystack \
     --split test_tiny \
     --video_root ./Datasets/ego4d_data/ego4d_data/v1/256p \
@@ -37,9 +37,10 @@ python ./run_TStar_onDataset.py \
 # Parameters:
 #   --search_result_path: Path to the JSON file containing search results.
 #   --frame_index_key: The key in the JSON file that indicates the frame indexes/timestamps.
-python val_tstar_results.py \
-    --search_result_path results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json \
+python ./LVHaystackBench/val_tstar_results.py \ 
+    --search_result_path ./results/frame_search/yolo-World_TStar_LVHaystack_tiny.json \
     --frame_index_key keyframe_timestamps
+
 
 # -----------------------------------------------------------------------------
 # Step 3: Validate QA Results
@@ -50,8 +51,9 @@ python val_tstar_results.py \
 #   --num_frame: Number of frames fed into the QA model.
 #   --sampling_type: The frame sampling method (here, "TStar").
 #   --duration_type: Whether QA is performed on the full video or a shorter clip (here, "video").
-python val_qa_results_jinhui.py \
-    --json_file results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json \
+python ./LVHaystackBench/val_qa_results.py \
+    --json_file ./results/frame_search/yolo-World_TStar_LVHaystack_tiny.json \
+    --backend gpt-4o \
     --num_frame 8 \
     --sampling_type TStar \
     --duration_type video

@@ -378,7 +378,6 @@ class TStarSearcher:
         # Read the frames from the video.
         indices, frames = self.read_frame_batch(video_path, frame_indices_in_video)
         return frames, time_stamps_secs
-
     # --- Verification Methods ---
     def verify_and_remove_target(
         self,

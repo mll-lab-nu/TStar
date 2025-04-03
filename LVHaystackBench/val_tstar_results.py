@@ -376,7 +376,7 @@ def parse_arguments() -> argparse.Namespace:
         description="Calculate PRF and SSIM metrics from video analysis results."
     )
     parser.add_argument('--search_result_path', type=str,
-                        default="results/frame_search/2025-03-22-07-33-52objnew_LVHaystack_gpt4_raw_vid1.json",
+                        default="./results/frame_search/yolo-World_TStar_LVHaystack_tiny.json",
                         help='Path to the input JSON file containing video analysis results.')
     parser.add_argument('--frame_index_key', type=str, default="keyframe_timestamps",
                         help='the sampled frame index you want to eval')    
