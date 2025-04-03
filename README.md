@@ -1,8 +1,13 @@
 # TStar: A Unified KeyFrame Searching Framework for Video Question Answering
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vllm-project/vllm/main/docs/source/assets/logos/vllm-logo-text-dark.png">
+      <img src="https://github.com/user-attachments/assets/4ce88690-ebbb-41ab-bdbd-522cb63762db" alt="TStar framework" height="300">
+  </picture>
+</p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/5f9405cc-57e8-47f3-8df4-1156b2c17b68" alt="TStar framework" height="300"><br>
     <a href="#"><img src="https://img.shields.io/badge/🔍_Post-7588C0?style=for-the-badge&logoColor=white" alt="Post"></a>
     <a href="https://longvideohaystack.github.io/"><img src="https://img.shields.io/badge/🏠_Project_Page-5B8CD8?style=for-the-badge&logoColor=white" alt="Project Page"></a>
     <a href="https://www.lvhaystackai.com"><img src="https://img.shields.io/badge/🎮_Demo-9E75D8?style=for-the-badge&logoColor=white" alt="Demo"></a>
