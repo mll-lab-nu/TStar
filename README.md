@@ -1,14 +1,17 @@
 # TStar: A Unified KeyFrame Searching Framework for Video Question Answering
 
-**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision, QWen-VL and GPT-4o to understand and reason over video data.
 
 <p align="center">
+  <img src="https://github.com/user-attachments/assets/5f9405cc-57e8-47f3-8df4-1156b2c17b68" alt="TStar framework" height="300"><br>
     <a href="#"><img src="https://img.shields.io/badge/🔍_Post-7588C0?style=for-the-badge&logoColor=white" alt="Post"></a>
     <a href="https://longvideohaystack.github.io/"><img src="https://img.shields.io/badge/🏠_Project_Page-5B8CD8?style=for-the-badge&logoColor=white" alt="Project Page"></a>
     <a href="https://www.lvhaystackai.com"><img src="https://img.shields.io/badge/🎮_Demo-9E75D8?style=for-the-badge&logoColor=white" alt="Demo"></a>
     <a href="https://huggingface.co/datasets/LVHaystack/LongVideoHaystack"><img src="https://img.shields.io/badge/🗃️_Dataset-5BAAD8?style=for-the-badge&logoColor=white" alt="Dataset"></a>
     <a href="#"><img src="https://img.shields.io/badge/📄_Paper-D86BDB?style=for-the-badge&logoColor=white" alt="Paper"></a>
 </p>
+
+**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision, QWen-VL and GPT-4o to understand and reason over video data.
+
 
 **2025.4.4 Update:**
 
