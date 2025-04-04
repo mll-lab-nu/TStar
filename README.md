@@ -18,9 +18,9 @@
 **TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision, QWen-VL and GPT-4o to understand and reason over video data.
 
 
-**2025.4.4 Update:**
+**2025.4.4 Update:** We’ve shared a compact demo set of TStar outputs [LV-Haystack Tiny (Google Drive)](https://drive.google.com/drive/folders/1ig0XtZqGFYwERkARxCQMqIyKQjrtxcrx?usp=sharing)
 
-We are thrilled to release TStar and LongVideoHaystack!
+**2025.4.4 Update:** We are thrilled to release TStar and LongVideoHaystack!
 
 
 ## Features
@@ -87,8 +87,7 @@ bash ./eval_LV_Haystack.sh
 ```
 </details>
 
-📁 **Checkpoints**: Here are the intermediate JSON files generated from the latest version, in case others’d like to quickly check our T* outputs.
-[LV-Haystack Tiny (Google Drive)](https://drive.google.com/drive/folders/1ig0XtZqGFYwERkARxCQMqIyKQjrtxcrx?usp=sharing)
+
 
 ### Running T* on Your Dataset
 
