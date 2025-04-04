@@ -73,7 +73,8 @@ export OPENAI_API_KEY=your_openai_api_key
 python run_TStar_Demo_onVideo.py \
     --video_path /path/to/LVHaystack/38737402-19bd-4689-9e74-3af391b15feb.mp4 \
     --question "What is the color of the couch?" \
-    --options "A) Red, B) Blue, C) Green, D) Yellow"     --grounder gpt-4o \
+    --options "A) Red, B) Blue, C) Green, D) Yellow" \
+    --grounder gpt-4o \
     --heuristic owl-vit \
     --search_nframes 8
 ```
