@@ -155,11 +155,12 @@ If you find **TStar** helpful, please consider citing us:
 
 ```bibtex
 @misc{tstar,
-  title={Re-thinking Temporal Search for Long-Form Video Understanding}, 
-  author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
-  year={2025},
-  eprint={2503.TODO},
-  archivePrefix={arXiv},
-  primaryClass={cs.LG}
+      title={Re-thinking Temporal Search for Long-Form Video Understanding}, 
+      author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
+      year={2025},
+      eprint={2504.02259},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2504.02259}, 
 }
 ```
