@@ -2,7 +2,6 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vllm-project/vllm/main/docs/source/assets/logos/vllm-logo-text-dark.png">
       <img src="https://github.com/user-attachments/assets/4ce88690-ebbb-41ab-bdbd-522cb63762db" alt="TStar framework" height="300">
   </picture>
 </p>
