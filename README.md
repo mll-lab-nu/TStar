@@ -7,9 +7,9 @@
 </p>
 
 <p align="center">
-    <a href="#"><img src="https://img.shields.io/badge/🔍_Post-7588C0?style=for-the-badge&logoColor=white" alt="Post"></a>
+    <a href="https://x.com/wzihanw/status/1908284905777488215"><img src="https://img.shields.io/badge/🔍_Post-7588C0?style=for-the-badge&logoColor=white" alt="Post"></a>
     <a href="https://longvideohaystack.github.io/"><img src="https://img.shields.io/badge/🏠_Project_Page-5B8CD8?style=for-the-badge&logoColor=white" alt="Project Page"></a>
-    <a href="https://www.lvhaystackai.com"><img src="https://img.shields.io/badge/🎮_Demo-9E75D8?style=for-the-badge&logoColor=white" alt="Demo"></a>
+    <a href="https://longvideohaystack.github.io/demo"><img src="https://img.shields.io/badge/🎮_Demo-9E75D8?style=for-the-badge&logoColor=white" alt="Demo"></a>
     <a href="https://huggingface.co/datasets/LVHaystack/LongVideoHaystack"><img src="https://img.shields.io/badge/🗃️_Dataset-5BAAD8?style=for-the-badge&logoColor=white" alt="Dataset"></a>
     <a href="https://arxiv.org/abs/2504.02259"><img src="https://img.shields.io/badge/📄_Paper-D86BDB?style=for-the-badge&logoColor=white" alt="Paper"></a>
 </p>
