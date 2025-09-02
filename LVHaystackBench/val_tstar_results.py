@@ -159,14 +159,20 @@ def load_json_file(file_path: str) -> Any:
         logger.error(f"JSON file does not exist: {file_path}")
         raise FileNotFoundError(f"JSON file does not exist: {file_path}")
 
-    with open(file_path, 'r', encoding='utf-8') as f:
-        try:
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             logger.info(f"Successfully loaded JSON file: {file_path}")
             return data
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decoding JSON file: {file_path}")
-            raise e
+    except json.JSONDecodeError as e:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            # maybe this is a jsonl file, load like jsonl
+            data = [json.loads(line) for line in f]
+            logger.info(f"Successfully loaded JSONL file: {file_path}")
+            return data
+    except Exception as e:
+        logger.error(f"Error decoding JSON file: {file_path}")
+        raise e
 
 def save_json_file(data: Any, file_path: str) -> None:
     """Save data to a JSON file."""
@@ -259,6 +265,9 @@ def extract_metrics_data(result_data: List[Dict[str, Any]]) -> Tuple[List[str], 
     video_paths = []
     searching_sec = []
     gt_seconds = []
+    searching_indexes = []
+    gt_indexes = []
+
     for idx, item in enumerate(result_data):
         try:
             video_path = item['video_path']
@@ -276,10 +285,13 @@ def extract_metrics_data(result_data: List[Dict[str, Any]]) -> Tuple[List[str], 
 
         gt_sec = [position / fps_video for position in gt_frame_indexes]
         searching_sec.append(frame_timestamps)
+        searching_indexes.append([f * fps_video for f in frame_timestamps])
+        gt_indexes.append(gt_frame_indexes)
+
         gt_seconds.append(gt_sec)
         video_paths.append(video_path)
 
-    return video_paths, searching_sec, gt_seconds
+    return video_paths, searching_sec, gt_seconds, searching_indexes, gt_indexes
 
 def calculate_metrics(result_data: List[Dict[str, Any]], 
                       frame_index_key="keyframe_timestamps",
@@ -288,7 +300,7 @@ def calculate_metrics(result_data: List[Dict[str, Any]],
     """
     Calculate Temporal PRF and SSIM metrics for all video entries.
     """
-    video_paths, searching_sec, gt_seconds = extract_metrics_data(result_data)
+    video_paths, searching_sec, gt_seconds, searching_indexes, gt_indexes = extract_metrics_data(result_data)
     list_gt = []
     list_pred = []
     list_gt_images = []
@@ -296,12 +308,12 @@ def calculate_metrics(result_data: List[Dict[str, Any]],
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {}
-        for idx, (video_path, pred_timestamps, gt_positions) in enumerate(zip(video_paths, searching_sec, gt_seconds)):
+        for idx, (video_path, pred_timestamps, gt_positions, pred_indexes_one, gt_indexes_one) in enumerate(zip(video_paths, searching_sec, gt_seconds, searching_indexes, gt_indexes)):
             try:
-                gt_frame_nums = np.array(gt_positions, dtype=int)
-                pred_frame_nums = np.array([int(ts * fps) for ts in pred_timestamps], dtype=int)
-                list_gt.append(gt_frame_nums)
-                list_pred.append(pred_frame_nums)
+                list_gt.append(np.array(gt_positions)) # temporal-based gt, in seconds
+                list_pred.append(np.array(pred_timestamps)) # temporal-based pred, in seconds
+                gt_frame_nums = np.array(gt_indexes_one, dtype=int)
+                pred_frame_nums = np.array([int(ts * fps) for ts in pred_indexes_one], dtype=int)
                 combined_frames = gt_frame_nums.tolist() + pred_frame_nums.tolist()
                 future = executor.submit(extract_frames, video_path, combined_frames)
                 future_to_idx[future] = idx
