@@ -8,13 +8,13 @@
 
 <p align="center">
     <a href="https://x.com/wzihanw/status/1908284905777488215"><img src="https://img.shields.io/badge/🔍_Post-7588C0?style=for-the-badge&logoColor=white" alt="Post"></a>
-    <a href="https://longvideohaystack.github.io/"><img src="https://img.shields.io/badge/🏠_Project_Page-5B8CD8?style=for-the-badge&logoColor=white" alt="Project Page"></a>
-    <a href="https://longvideohaystack.github.io/demo"><img src="https://img.shields.io/badge/🎮_Demo-9E75D8?style=for-the-badge&logoColor=white" alt="Demo"></a>
-    <a href="https://huggingface.co/datasets/LVHaystack/LongVideoHaystack"><img src="https://img.shields.io/badge/🗃️_Dataset-5BAAD8?style=for-the-badge&logoColor=white" alt="Dataset"></a>
+    <a href="https://huggingface.co/datasets/MLL-Lab/LongVideoHaystack"><img src="https://img.shields.io/badge/🗃️_Dataset-5BAAD8?style=for-the-badge&logoColor=white" alt="Dataset"></a>
     <a href="https://arxiv.org/abs/2504.02259"><img src="https://img.shields.io/badge/📄_Paper-D86BDB?style=for-the-badge&logoColor=white" alt="Paper"></a>
 </p>
 
-**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understandiong tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision, QWen-VL and GPT-4o to understand and reason over video data.
+**TStar** is an advanced framework that integrates Keyframe Searching into Vision-Language Models (VLMs), enhancing their performance for extremely long video understanding tasks. By efficiently identifying relevant frames within videos, TStar improves the ability of state-of-the-art models like LLaVA-oneVision, QWen-VL and GPT-4o to understand and reason over video data.
+
+This repository provides the code for the CVPR 2025 paper [T\*: Re-thinking Temporal Search for Long-Form Video Understanding](https://arxiv.org/abs/2504.02259) (arXiv 2504.02259). The paper frames temporal search for long-form video understanding as a Long Video Haystack problem: finding a minimal set of relevant keyframes (e.g., one to five) from tens of thousands of frames. It introduces **LV-Haystack** ([LongVideoHaystack on Hugging Face](https://huggingface.co/datasets/MLL-Lab/LongVideoHaystack)), a benchmark with 480 hours of video and 15,092 human-annotated instances for training and evaluating temporal search, and **T\***, a lightweight temporal search framework that reframes keyframe selection in long videos as spatial search with an adaptive zooming-in mechanism. Under a 32-frame inference budget, T\* improves GPT-4o from 50.5% to 53.1% and LLaVA-OneVision-72B from 56.5% to 62.4% on the LongVideoBench XL subset.
 
 
 **2025.4.4 Update:** We’ve shared a compact demo set of TStar outputs [LV-Haystack Tiny (Google Drive)](https://drive.google.com/drive/folders/1ig0XtZqGFYwERkARxCQMqIyKQjrtxcrx?usp=sharing)
@@ -128,7 +128,7 @@ Once your dataset is prepared, you can run TStar to perform keyframe searching. 
   
 ```python
 python ./run_TStar_onDataset.py \
-    --dataset_meta LVHaystack/LongVideoHaystack \
+    --dataset_meta MLL-Lab/LongVideoHaystack \
     --split test_tiny \
     --video_root ./Datasets/ego4d_data/ego4d_data/v1/256p \
     --output_json_name TStar_LVHaystack_tiny.json \
@@ -147,14 +147,14 @@ python ./run_TStar_onDataset.py \
 - Haosen Sun: haosensun2026@u.northwestern.edu
 - Keshigeyan Chandrasegaran: keshik@stanford.edu
 - Anabella Aisaro: anabellaisaro2025@u.northwestern.edu
-- Manling Li: manling.li@northwestern.edu
+- [Manling Li](https://limanling.github.io/): manling.li@northwestern.edu
 
 # Citation
 If you find **TStar** helpful, please consider citing us:
 
 ```bibtex
 @misc{tstar,
-      title={Re-thinking Temporal Search for Long-Form Video Understanding}, 
+      title={T*: Re-thinking Temporal Search for Long-Form Video Understanding}, 
       author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
       year={2025},
       eprint={2504.02259},

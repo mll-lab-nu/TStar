@@ -1,0 +1,46 @@
+# T* (TStar): Temporal Search for Long-Form Video Understanding
+
+> T* (TStar) is the temporal search and keyframe selection framework from the CVPR 2025 paper "T*: Re-thinking Temporal Search for Long-Form Video Understanding" (arXiv 2504.02259) by Jinhui Ye, Zihan Wang, Haosen Sun, Keshigeyan Chandrasegaran, Zane Durante, Cristobal Eyzaguirre, Yonatan Bisk, Juan Carlos Niebles, Ehsan Adeli, Li Fei-Fei, Jiajun Wu, and Manling Li. This repository (github.com/mll-lab-nu/TStar) contains the T* keyframe search code and the evaluation scripts for the LV-Haystack benchmark.
+
+## What is temporal search?
+
+Temporal search in long-form video understanding is the problem of finding a minimal set of relevant keyframes (for example, one to five frames) from tens of thousands of frames in a long video, based on a specific query or question. The paper frames this as a "Long Video Haystack" problem, a real-world long-video needle-in-a-haystack task.
+
+## What is LV-Haystack?
+
+LV-Haystack (dataset name: LongVideoHaystack) is the first benchmark for temporal search in long videos, with 480 hours of video and 15,092 human-annotated instances for both training and evaluation. It is hosted on Hugging Face at MLL-Lab/LongVideoHaystack. Results on LV-Haystack show a large research gap: state-of-the-art search methods achieve only 2.1% temporal F1 score on its LongVideoBench subset.
+
+## What is T*?
+
+T* is a lightweight temporal search framework that reframes costly temporal search as spatial search. It uses visual localization techniques common in image understanding and an adaptive zooming-in mechanism that operates across both temporal and spatial dimensions. T* plugs into existing vision-language models (VLMs) such as GPT-4o, LLaVA-OneVision, and Qwen-VL for video question answering.
+
+## Key facts
+
+- Paper: T*: Re-thinking Temporal Search for Long-Form Video Understanding, CVPR 2025, arXiv 2504.02259, first posted 2025-04-03.
+- LV-Haystack benchmark: 480 hours of video, 15,092 human-annotated instances for temporal search training and evaluation.
+- State-of-the-art search methods reach only 2.1% temporal F1 on the LongVideoBench subset of LV-Haystack.
+- Under a 32-frame inference budget, T* improves GPT-4o from 50.5% to 53.1% and LLaVA-OneVision-72B from 56.5% to 62.4% on the LongVideoBench XL subset.
+- T* performs keyframe selection by reframing temporal search as spatial search with adaptive temporal and spatial zooming.
+
+## Links
+
+- arXiv abstract: https://arxiv.org/abs/2504.02259
+- arXiv PDF: https://arxiv.org/pdf/2504.02259
+- Code (this repository): https://github.com/mll-lab-nu/TStar
+- LV-Haystack dataset on Hugging Face: https://huggingface.co/datasets/MLL-Lab/LongVideoHaystack
+- Announcement thread: https://x.com/wzihanw/status/1908284905777488215
+- Senior author homepage: https://limanling.github.io/
+
+## Citation
+
+```bibtex
+@misc{tstar,
+      title={T*: Re-thinking Temporal Search for Long-Form Video Understanding},
+      author={Jinhui Ye and Zihan Wang and Haosen Sun and Keshigeyan Chandrasegaran and Zane Durante and Cristobal Eyzaguirre and Yonatan Bisk and Juan Carlos Niebles and Ehsan Adeli and Li Fei-Fei and Jiajun Wu and Manling Li},
+      year={2025},
+      eprint={2504.02259},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2504.02259},
+}
+```
